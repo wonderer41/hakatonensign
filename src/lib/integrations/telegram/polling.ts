@@ -1,6 +1,7 @@
-import { buildResumeMessage, buildStatusMessage, HELP_MESSAGE, START_MESSAGE, continuumReader, type ContinuumReader } from "./commands";
+import { buildAiRecoveryMessage, buildResumeMessage, buildStatusMessage, AI_COMMANDS_MESSAGE, HELP_MESSAGE, START_MESSAGE, continuumReader, type AiRecoveryServices, type ContinuumReader } from "./commands";
 import { TelegramApiError, TelegramClient, type TelegramUpdate } from "./client";
 import type { TelegramBotConfig } from "./config";
+import { HttpError } from "@/lib/api/http";
 
 const RETRY_DELAY_MS = 2_000;
 const LONG_POLL_SECONDS = 25;
@@ -16,6 +17,7 @@ export interface PollingOptions {
   client: TelegramClient;
   config: TelegramBotConfig;
   reader?: ContinuumReader;
+  aiRecovery?: AiRecoveryServices;
   log?: (message: string) => void;
 }
 
@@ -33,13 +35,14 @@ export async function handleTelegramUpdate(
   }
 
   const reader = options.reader ?? continuumReader;
+  const command = commandName(message.text);
   try {
-    switch (commandName(message.text)) {
+    switch (command) {
       case "/start":
-        await options.client.sendMessage(message.chat.id, START_MESSAGE);
+        await options.client.sendMessage(message.chat.id, `${START_MESSAGE}\n\n${AI_COMMANDS_MESSAGE}`);
         break;
       case "/help":
-        await options.client.sendMessage(message.chat.id, HELP_MESSAGE);
+        await options.client.sendMessage(message.chat.id, `${HELP_MESSAGE}\n\n${AI_COMMANDS_MESSAGE}`);
         break;
       case "/status":
         await options.client.sendMessage(message.chat.id, await buildStatusMessage(reader, options.config.projectId));
@@ -47,10 +50,30 @@ export async function handleTelegramUpdate(
       case "/resume":
         await options.client.sendMessage(message.chat.id, await buildResumeMessage(reader, options.config.projectId));
         break;
+      case "/catchup":
+        await options.client.sendMessage(message.chat.id, await buildAiRecoveryMessage(options.config.projectId, "catch_up", options.aiRecovery));
+        break;
+      case "/next":
+        await options.client.sendMessage(message.chat.id, await buildAiRecoveryMessage(options.config.projectId, "next_action", options.aiRecovery));
+        break;
+      case "/meeting":
+        await options.client.sendMessage(message.chat.id, await buildAiRecoveryMessage(options.config.projectId, "meeting_prep", options.aiRecovery));
+        break;
       default:
-        await options.client.sendMessage(message.chat.id, HELP_MESSAGE);
+        await options.client.sendMessage(message.chat.id, `${HELP_MESSAGE}\n\n${AI_COMMANDS_MESSAGE}`);
     }
   } catch (error) {
+    if (["/catchup", "/next", "/meeting"].includes(command)) {
+      options.log?.("Telegram AI context command failed");
+      const code = error instanceof HttpError ? error.code : "";
+      const messageText = code === "AI_NOT_CONFIGURED"
+        ? "AI context recovery is not configured yet. Try /status or /resume instead."
+        : code === "AI_CONTEXT_EMPTY"
+          ? "There is not enough project activity to recover context yet."
+          : "AI context recovery is unavailable right now. Please try again.";
+      await options.client.sendMessage(message.chat.id, messageText);
+      return;
+    }
     options.log?.(error instanceof Error ? error.message : "Telegram command failed");
     await options.client.sendMessage(message.chat.id, "Continuum could not load that right now. Please try again.");
   }

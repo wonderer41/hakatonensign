@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/lib/ai/*.test.ts",
+    "test": "tsx --test src/lib/ai/*.test.ts src/lib/integrations/telegram/*.test.ts",
     "bot:dev": "tsx scripts/telegram-bot.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",

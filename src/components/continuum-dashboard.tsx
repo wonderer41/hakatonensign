@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type {
   ApiError,
   AiContextResponse,
+  AiMode,
   ContextItem,
   ContextSummary,
   PaginatedEvents,
@@ -148,6 +149,35 @@ function eventActionLabel(event: WorkEvent): string {
 function calendarText(event: WorkEvent, field: string): string | null {
   const value = event.metadata[field];
   return typeof value === "string" && value.trim() ? value : null;
+}
+
+const AI_MODES: { value: AiMode; label: string; question: string }[] = [
+  { value: "catch_up", label: "Catch Me Up", question: "Where did we leave off, and what should I know to pick things back up?" },
+  { value: "next_action", label: "Next Action", question: "What is the most useful next action I can take?" },
+  { value: "meeting_prep", label: "Meeting Prep", question: "What should I know and prepare for my next meeting?" },
+];
+
+type SyncSourceResult = {
+  source: "GitHub" | "Jira" | "Google Calendar";
+  ok: boolean;
+  fetched?: number;
+  created?: number;
+  syncedAt?: string;
+  lastSyncedAt?: string;
+};
+
+function normalizedText(value: string): string {
+  return value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
+function uniqueItems(items: string[], alreadyShown: string[]): string[] {
+  const seen = alreadyShown.map(normalizedText).filter(Boolean);
+  return items.filter((item) => {
+    const normalized = normalizedText(item);
+    if (!normalized || seen.some((shown) => shown === normalized || (Math.min(shown.length, normalized.length) >= 30 && (shown.includes(normalized) || normalized.includes(shown))))) return false;
+    seen.push(normalized);
+    return true;
+  });
 }
 
 function formatCalendarDate(event: WorkEvent): string {
@@ -351,10 +381,13 @@ export default function ContinuumDashboard() {
   const [renameTarget, setRenameTarget] = useState<Project | null>(null);
   const [renamingProject, setRenamingProject] = useState(false);
   const [renameError, setRenameError] = useState("");
-  const [aiQuestion, setAiQuestion] = useState("");
+  const [aiMode, setAiMode] = useState<AiMode>("catch_up");
+  const [aiQuestion, setAiQuestion] = useState(AI_MODES[0].question);
   const [aiAnswer, setAiAnswer] = useState<AiContextResponse | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncResults, setSyncResults] = useState<SyncSourceResult[]>([]);
 
   const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? null;
   const isDetailsLoading = detailsLoading || (Boolean(selectedProjectId) && !summary && !detailsError);
@@ -383,6 +416,20 @@ export default function ContinuumDashboard() {
     }
     return result;
   }, [aiAnswer, eventPage.data]);
+  const aiResultSections = useMemo(() => {
+    if (!aiAnswer) return null;
+    const alreadyShown = [aiAnswer.answer];
+    const whereWeLeftOff = uniqueItems([aiAnswer.whereWeLeftOff], alreadyShown)[0] ?? "";
+    if (whereWeLeftOff) alreadyShown.push(whereWeLeftOff);
+    const nextSteps = uniqueItems(aiAnswer.nextSteps, alreadyShown);
+    const primaryAction = nextSteps[0] ?? "";
+    if (primaryAction) alreadyShown.push(primaryAction);
+    const otherNextSteps = uniqueItems(nextSteps.slice(1), alreadyShown);
+    const blockers = uniqueItems(aiAnswer.blockers, alreadyShown);
+    alreadyShown.push(...blockers);
+    const upcomingMeetings = uniqueItems(aiAnswer.upcomingMeetings, alreadyShown);
+    return { whereWeLeftOff, primaryAction, otherNextSteps, blockers, upcomingMeetings };
+  }, [aiAnswer]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -484,8 +531,8 @@ export default function ContinuumDashboard() {
   }
 
   async function askContinuum(question = aiQuestion) {
-    const trimmedQuestion = question.trim();
-    if (!selectedProjectId || !trimmedQuestion || aiLoading) return;
+    const trimmedQuestion = question.trim() || AI_MODES.find((mode) => mode.value === aiMode)!.question;
+    if (!selectedProjectId || aiLoading || syncLoading) return;
     setAiQuestion(trimmedQuestion);
     setAiLoading(true);
     setAiError("");
@@ -494,7 +541,7 @@ export default function ContinuumDashboard() {
       const result = await requestJson<{ data: AiContextResponse }>("/api/ai/context", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: selectedProjectId, question: trimmedQuestion }),
+        body: JSON.stringify({ projectId: selectedProjectId, question: trimmedQuestion, mode: aiMode }),
       });
       setAiAnswer(result.data);
     } catch (error) {
@@ -502,6 +549,43 @@ export default function ContinuumDashboard() {
     } finally {
       setAiLoading(false);
     }
+  }
+
+  async function syncSources() {
+    const projectId = selectedProjectId;
+    if (!projectId || syncLoading) return;
+    setSyncLoading(true);
+    setSyncResults([]);
+    setAiAnswer(null);
+    setAiError("");
+    setDetailsLoading(true);
+
+    const sources = [
+      { source: "GitHub" as const, url: "/api/integrations/github/sync" },
+      { source: "Jira" as const, url: "/api/integrations/jira/sync" },
+      { source: "Google Calendar" as const, url: "/api/integrations/google-calendar/sync" },
+    ];
+    const previousResults = syncResults;
+    const results = await Promise.all(sources.map(async ({ source, url }): Promise<SyncSourceResult> => {
+      try {
+        const result = await requestJson<{ data: { fetched: number; created: number; syncedAt: string } }>(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId }),
+        });
+        return { source, ok: true, fetched: result.data.fetched, created: result.data.created, syncedAt: result.data.syncedAt, lastSyncedAt: result.data.syncedAt };
+      } catch {
+        // Keep upstream details and provider errors on the server.
+        const previous = previousResults.find((item) => item.source === source);
+        return { source, ok: false, lastSyncedAt: previous?.lastSyncedAt ?? previous?.syncedAt };
+      }
+    }));
+
+    if (selectedProjectId === projectId) {
+      setSyncResults(results);
+      setRefreshToken((current) => current + 1);
+    }
+    setSyncLoading(false);
   }
 
   function openRename(project: Project) {
@@ -581,6 +665,7 @@ export default function ContinuumDashboard() {
     setEventPage({ data: [], nextCursor: null });
     setAiAnswer(null);
     setAiError("");
+    setSyncResults([]);
     setSelectedProjectId(projectId);
   }
 
@@ -730,20 +815,39 @@ export default function ContinuumDashboard() {
             <section aria-labelledby="ask-continuum-title" className="ask-section">
               <div className="section-heading-row ask-heading-row">
                 <div><p className="eyebrow">RECOVER YOUR CONTEXT</p><h2 id="ask-continuum-title">Ask Continuum</h2></div>
-                <span className="summary-mode"><span />Grounded in project activity</span>
+                <div className="ask-heading-tools">
+                  <span className="summary-mode"><span />Grounded in project activity</span>
+                  <button className="secondary-button sync-sources-button" disabled={!selectedProjectId || syncLoading || aiLoading || detailsLoading} onClick={() => void syncSources()} type="button">
+                    <Icon name="refresh" size={14} />{syncLoading ? "Syncing…" : "Sync Sources"}
+                  </button>
+                </div>
+              </div>
+              {syncResults.length > 0 && <div aria-live="polite" className="sync-results">
+                <span className="sync-demo-note">Local demo sync · credentials stay server-side</span>
+                <div className="sync-result-list">{syncResults.map((result) => <span className={`sync-result${result.ok ? " sync-result-ok" : " sync-result-failed"}`} key={result.source}>
+                  <strong>{result.source}</strong>{result.ok ? ` · ${result.fetched} checked, ${result.created} new · Last synced ${result.syncedAt ? new Date(result.syncedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "just now"}` : ` · Sync failed; check server configuration${result.lastSyncedAt ? ` · Last success ${new Date(result.lastSyncedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}`}
+                </span>)}</div>
+              </div>}
+              <div aria-label="Briefing mode" className="ask-modes" role="group">
+                {AI_MODES.map((mode) => <button
+                  aria-pressed={aiMode === mode.value}
+                  className={`ask-mode${aiMode === mode.value ? " ask-mode-active" : ""}`}
+                  disabled={aiLoading || syncLoading}
+                  key={mode.value}
+                  onClick={() => {
+                    if (aiMode === mode.value) return;
+                    setAiMode(mode.value);
+                    setAiQuestion(mode.question);
+                    setAiAnswer(null);
+                    setAiError("");
+                  }}
+                  type="button"
+                >{mode.label}</button>)}
               </div>
               <form className="ask-form" onSubmit={(event) => { event.preventDefault(); void askContinuum(); }}>
-                <input aria-label="Ask Continuum a question" className="ask-input" onChange={(event) => setAiQuestion(event.target.value)} placeholder="What should I work on next?" value={aiQuestion} />
-                <button className="primary-button ask-button" disabled={aiLoading || !selectedProjectId || !aiQuestion.trim()} type="submit">{aiLoading ? "Thinking…" : "Ask"}</button>
+                <input aria-label="Ask Continuum a question" className="ask-input" onChange={(event) => setAiQuestion(event.target.value)} placeholder="Edit the briefing question…" value={aiQuestion} />
+                <button className="primary-button ask-button" disabled={aiLoading || syncLoading || !selectedProjectId} type="submit">{syncLoading ? "Syncing…" : aiLoading ? "Thinking…" : "Get briefing"}</button>
               </form>
-              <div className="ask-shortcuts" aria-label="Suggested questions">
-                {[
-                  "Where did we leave off?",
-                  "What should I work on next?",
-                  "What changed recently?",
-                  "What should I prepare before my next meeting?",
-                ].map((question) => <button className="ask-shortcut" key={question} onClick={() => { setAiQuestion(question); void askContinuum(question); }} type="button">{question}</button>)}
-              </div>
               {aiError && (
                 <div className="ask-notice" role="alert">
                   <Icon name="alert" size={16} />
@@ -754,11 +858,12 @@ export default function ContinuumDashboard() {
                 <article className="ask-answer">
                   <div className="ask-answer-heading"><span className="eyebrow">CONTINUUM SAYS</span><span className="confidence-pill">{aiAnswer.confidence} confidence</span></div>
                   <p className="ask-answer-text">{aiAnswer.answer}</p>
+                  {aiResultSections?.primaryAction && <div className="ask-primary-action"><p className="ask-label">Your next action</p><p>{aiResultSections.primaryAction}</p></div>}
                   <div className="ask-answer-grid">
-                    <div><p className="ask-label">Where you left off</p><p className="ask-value">{aiAnswer.whereWeLeftOff}</p></div>
-                    {aiAnswer.nextSteps.length > 0 && <div><p className="ask-label">Next steps</p><ul>{aiAnswer.nextSteps.map((step) => <li key={step}>{step}</li>)}</ul></div>}
-                    {aiAnswer.blockers.length > 0 && <div><p className="ask-label">Blockers</p><ul>{aiAnswer.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul></div>}
-                    {aiAnswer.upcomingMeetings.length > 0 && <div><p className="ask-label">Upcoming meetings</p><ul>{aiAnswer.upcomingMeetings.map((meeting) => <li key={meeting}>{meeting}</li>)}</ul></div>}
+                    {aiResultSections?.whereWeLeftOff && <div><p className="ask-label">Where you left off</p><p className="ask-value">{aiResultSections.whereWeLeftOff}</p></div>}
+                    {aiResultSections && aiResultSections.otherNextSteps.length > 0 && <div><p className="ask-label">Other next steps</p><ul>{aiResultSections.otherNextSteps.map((step) => <li key={step}>{step}</li>)}</ul></div>}
+                    {aiResultSections && aiResultSections.blockers.length > 0 && <div><p className="ask-label">Blockers</p><ul>{aiResultSections.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul></div>}
+                    {aiResultSections && aiResultSections.upcomingMeetings.length > 0 && <div><p className="ask-label">Upcoming meetings</p><ul>{aiResultSections.upcomingMeetings.map((meeting) => <li key={meeting}>{meeting}</li>)}</ul></div>}
                   </div>
                   {aiEvidenceEvents.length > 0 && (
                     <div className="ask-evidence"><p className="ask-label">Supporting evidence</p><div className="ask-evidence-links">{aiEvidenceEvents.map((event) => <a href={event.sourceUrl!} key={event.id} rel="noreferrer" target="_blank"><span>{sourceLabel(event.source)}</span><Icon name="external" size={12} /></a>)}</div></div>
