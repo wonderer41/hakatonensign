@@ -85,6 +85,10 @@ export interface CreateProjectRequest {
   description?: string | null;
 }
 
+export interface UpdateProjectRequest {
+  name: string;
+}
+
 export interface CreateEventRequest {
   projectId: string;
   source: EventSource;

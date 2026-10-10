@@ -1,4 +1,4 @@
-import type { CreateProjectRequest, Project } from "@/types/contracts";
+import type { CreateProjectRequest, Project, UpdateProjectRequest } from "@/types/contracts";
 import { HttpError } from "@/lib/api/http";
 import { toProject } from "./mappers";
 import { prisma } from "./prisma";
@@ -48,4 +48,22 @@ export async function assertProjectExists(projectId: string): Promise<void> {
     select: { id: true },
   });
   if (!project) throw new HttpError("NOT_FOUND", "Project not found");
+}
+
+export async function updateProject(
+  projectId: string,
+  input: UpdateProjectRequest,
+): Promise<Project> {
+  await assertProjectExists(projectId);
+  const row = await prisma.project.update({
+    where: { id: projectId },
+    data: { name: input.name },
+  });
+  return toProject(row);
+}
+
+// Deletes the project and, through the database cascade, all of its events.
+export async function deleteProject(projectId: string): Promise<void> {
+  const { count } = await prisma.project.deleteMany({ where: { id: projectId } });
+  if (count === 0) throw new HttpError("NOT_FOUND", "Project not found");
 }
