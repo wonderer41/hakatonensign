@@ -7,4 +7,61 @@ datasource db {
   provider = "postgresql"
 }
 
-// Product models will be added after the product requirements are defined.
+model Workspace {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  projects  Project[]
+}
+
+model Project {
+  id          String      @id @default(uuid()) @db.Uuid
+  workspaceId String      @db.Uuid
+  name        String      @db.VarChar(120)
+  description String?     @db.VarChar(1000)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  events      WorkEvent[]
+
+  @@index([workspaceId, updatedAt])
+}
+
+enum EventSource {
+  github
+  jira
+  manual
+}
+
+enum EventAction {
+  commit_pushed
+  pr_opened
+  pr_merged
+  pr_reviewed
+  issue_opened
+  issue_updated
+  issue_closed
+  task_updated
+  note_added
+}
+
+model WorkEvent {
+  id         String      @id @default(uuid()) @db.Uuid
+  projectId  String      @db.Uuid
+  source     EventSource
+  // Stable source-side ID used for deduplication. Postgres treats NULLs as
+  // distinct, so events without an externalId are never deduplicated.
+  externalId String?
+  timestamp  DateTime
+  actor      String
+  action     EventAction
+  summary    String
+  sourceUrl  String?
+  metadata   Json        @default("{}")
+  createdAt  DateTime    @default(now())
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, source, externalId])
+  @@index([projectId, timestamp])
+}
