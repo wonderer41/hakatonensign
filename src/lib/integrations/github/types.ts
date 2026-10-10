@@ -25,6 +25,7 @@ export interface GitHubPullRequest {
   updated_at: string;
   merged_at: string | null;
   merged_by?: GitHubUser | null;
+  head?: { ref?: string } | null;
 }
 
 export interface GitHubIssue {

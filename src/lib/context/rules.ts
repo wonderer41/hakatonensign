@@ -148,6 +148,7 @@ export function buildRulesContext(
 
   const items = new Map<string, WorkItem>();
   const commitsByBranch = new Map<string, WorkEvent[]>();
+  const knownBranches = new Set<string>();
   const completed: Ranked[] = [];
   const inProgress: Ranked[] = [];
   const blockers: Ranked[] = [];
@@ -178,9 +179,12 @@ export function buildRulesContext(
     const cite = { evidenceEventIds: [event.id], at: event.timestamp };
     switch (event.action) {
       case "commit_pushed": {
-        const branch =
-          str(event.metadata.branch) ?? str(event.metadata.repository) ?? "unknown branch";
-        commitsByBranch.set(branch, [...(commitsByBranch.get(branch) ?? []), event]);
+        // Group by branch when known, otherwise by repository. Only a real branch
+        // name can drive the "open a PR" suggestion below.
+        const branch = str(event.metadata.branch);
+        const group = branch ?? str(event.metadata.repository) ?? "unknown branch";
+        commitsByBranch.set(group, [...(commitsByBranch.get(group) ?? []), event]);
+        if (branch) knownBranches.add(branch);
         break;
       }
       case "pr_merged":
@@ -243,8 +247,9 @@ export function buildRulesContext(
     const latest = commits[commits.length - 1];
     const cite = { evidenceEventIds: evidence(commits), at: latest.timestamp };
     const count = commits.length === 1 ? "1 commit" : `${commits.length} commits`;
-    inProgress.push({ text: `${count} pushed to ${branch} (latest: ${latest.summary})`, ...cite });
-    if (!MAIN_BRANCHES.has(branch) && !branchesWithPr.has(branch)) {
+    const latestText = latest.summary.replace(/^Pushed commit\s+/i, "");
+    inProgress.push({ text: `${count} pushed to ${branch} (latest: ${latestText})`, ...cite });
+    if (knownBranches.has(branch) && !MAIN_BRANCHES.has(branch) && !branchesWithPr.has(branch)) {
       nextSteps.push({ text: `Consider opening a PR for ${branch}`, ...cite });
     }
   }

@@ -30,6 +30,14 @@ function parseSyncRequest(body: unknown): GitHubSyncRequest {
 
 export const POST = withErrorHandling(async (request: Request) => {
   const input = parseSyncRequest(await readJsonBody(request));
-  const data = await syncGitHubRepository(input.projectId, input.owner, input.repo);
+  const result = await syncGitHubRepository(input.projectId, input.owner, input.repo);
+  const data = {
+    projectId: result.projectId,
+    repository: result.repository,
+    fetched: result.fetched,
+    created: result.created,
+    duplicates: result.duplicates,
+    syncedAt: result.syncedAt,
+  };
   return Response.json({ data });
 });
