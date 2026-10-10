@@ -68,6 +68,52 @@ export async function ingestEvent(input: ValidatedEventInput): Promise<IngestRes
   }
 }
 
+// Updates a source-owned snapshot in place when its stable external ID already
+// exists. Integrations that model the current state of an external item can use
+// this without changing the append-only behavior of ingestEvent().
+export async function upsertEvent(input: ValidatedEventInput): Promise<IngestResult> {
+  if (input.externalId === null) return ingestEvent(input);
+  const externalId = input.externalId;
+  await assertProjectExists(input.projectId);
+  const existing = await findDuplicate(input);
+  const row = await prisma.$transaction(async (transaction) => {
+    const event = await transaction.workEvent.upsert({
+      where: {
+        projectId_source_externalId: {
+          projectId: input.projectId,
+          source: input.source,
+          externalId,
+        },
+      },
+      create: {
+        projectId: input.projectId,
+        source: input.source,
+        externalId,
+        timestamp: new Date(input.timestamp),
+        actor: input.actor,
+        action: input.action,
+        summary: input.summary,
+        sourceUrl: input.sourceUrl,
+        metadata: input.metadata as Prisma.InputJsonObject,
+      },
+      update: {
+        timestamp: new Date(input.timestamp),
+        actor: input.actor,
+        action: input.action,
+        summary: input.summary,
+        sourceUrl: input.sourceUrl,
+        metadata: input.metadata as Prisma.InputJsonObject,
+      },
+    });
+    await transaction.project.update({
+      where: { id: input.projectId },
+      data: { updatedAt: new Date() },
+    });
+    return event;
+  });
+  return { event: toWorkEvent(row), created: existing === null };
+}
+
 interface Cursor {
   t: string;
   id: string;
