@@ -112,17 +112,10 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-function formatRelativeTime(value: string): string {
+function formatLocalDateTime(value: string): string {
   const date = new Date(value);
-  const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  if (Number.isNaN(date.getTime())) return "Date unavailable";
+  return date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 function sourceLabel(source: EventSource): string {
@@ -191,7 +184,8 @@ function formatCalendarDate(event: WorkEvent): string {
     const end = endDate ? new Date(`${endDate}T00:00:00`) : null;
     const startLabel = start.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
     if (end && endDate !== startDate) {
-      const endLabel = new Date(end.getTime() - 86_400_000).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      end.setDate(end.getDate() - 1);
+      const endLabel = end.toLocaleDateString(undefined, { month: "short", day: "numeric" });
       return `${startLabel} – ${endLabel} · All day`;
     }
     return `${startLabel} · All day`;
@@ -201,8 +195,7 @@ function formatCalendarDate(event: WorkEvent): string {
   const end = new Date(calendarText(event, "end") ?? event.timestamp);
   const dateLabel = start.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
   const timeLabel = `${start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} – ${end.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
-  const timeZone = calendarText(event, "timeZone");
-  return `${dateLabel} · ${timeLabel}${timeZone ? ` · ${timeZone}` : ""}`;
+  return `${dateLabel} · ${timeLabel}`;
 }
 
 function UpcomingMeetings({ events, loading }: { events: WorkEvent[]; loading: boolean }) {
@@ -341,8 +334,8 @@ function ActivityRow({ event }: { event: WorkEvent }) {
           <span className="mx-2 text-slate-700">·</span>
           {sourceLabel(event.source)}
           <span className="mx-2 text-slate-700">·</span>
-          <time dateTime={event.timestamp} title={new Date(event.timestamp).toLocaleString()}>
-            {formatRelativeTime(event.timestamp)}
+          <time dateTime={event.timestamp} title={formatLocalDateTime(event.timestamp)}>
+            {formatLocalDateTime(event.timestamp)}
           </time>
         </p>
       </div>
@@ -866,8 +859,9 @@ export default function ContinuumDashboard() {
               {aiAnswer && (
                 <article className="ask-answer">
                   <div className="ask-answer-heading"><span className="ask-briefing-label">Briefing</span><span className="confidence-pill">{aiAnswer.confidence}</span></div>
+                  {aiMode === "next_action" && aiResultSections?.primaryAction && <div className="ask-primary-action"><p className="ask-label"><Icon name="target" size={14} /> Your Next Action</p><p>{aiResultSections.primaryAction}</p></div>}
                   <p className="ask-answer-text">{aiAnswer.answer}</p>
-                  {aiResultSections?.primaryAction && <div className="ask-primary-action"><p className="ask-label"><Icon name="target" size={14} /> Your next action</p><p>{aiResultSections.primaryAction}</p></div>}
+                  {aiMode !== "next_action" && aiResultSections?.primaryAction && <div className="ask-primary-action"><p className="ask-label"><Icon name="target" size={14} /> Your next action</p><p>{aiResultSections.primaryAction}</p></div>}
                   <div className="ask-answer-grid">
                     {aiResultSections?.whereWeLeftOff && <div><p className="ask-label">Where you left off</p><p className="ask-value">{aiResultSections.whereWeLeftOff}</p></div>}
                     {aiResultSections && aiResultSections.otherNextSteps.length > 0 && <div><p className="ask-label">Other next steps</p><ul>{aiResultSections.otherNextSteps.map((step) => <li key={step}>{step}</li>)}</ul></div>}

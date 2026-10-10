@@ -4,6 +4,7 @@ import { toProject, toWorkEvent } from "@/lib/db/mappers";
 import { assertProjectExists } from "@/lib/db/projects";
 import { prisma } from "@/lib/db/prisma";
 import { isSafeExternalUrl } from "./safety";
+import { buildRulesContext } from "@/lib/context/rules";
 
 const RECENT_EVENT_LIMIT = 120;
 const CALENDAR_EVENT_LIMIT = 30;
@@ -135,15 +136,28 @@ export function prioritizeAiEvents(events: WorkEvent[], now = new Date()): WorkE
   return [...selected.values()].sort((a, b) => b.timestamp.localeCompare(a.timestamp) || b.id.localeCompare(a.id));
 }
 
-export async function aggregateProjectAiContext(projectId: string): Promise<ProjectAiContext> {
+export async function aggregateProjectAiContext(projectId: string, options: { since?: Date; sinceInclusive?: boolean } = {}): Promise<ProjectAiContext> {
   await assertProjectExists(projectId);
+  const now = new Date();
+  const isWindowed = options.since !== undefined;
+  const timestampWindow = isWindowed
+    ? { ...(options.sinceInclusive ? { gte: options.since } : { gt: options.since }), lte: now }
+    : undefined;
   const [projectRow, rules, recentRows, calendarRows] = await Promise.all([
     prisma.project.findUniqueOrThrow({ where: { id: projectId } }),
-    getProjectContext(projectId),
-    prisma.workEvent.findMany({ where: { projectId }, orderBy: [{ timestamp: "desc" }, { id: "desc" }], take: RECENT_EVENT_LIMIT }),
-    prisma.workEvent.findMany({ where: { projectId, source: "google_calendar", timestamp: { gte: new Date(Date.now() - 30 * 86_400_000) } }, orderBy: { timestamp: "asc" }, take: CALENDAR_EVENT_LIMIT }),
+    isWindowed
+      ? Promise.resolve(null)
+      : getProjectContext(projectId),
+    prisma.workEvent.findMany({ where: { projectId, ...(isWindowed ? { source: { not: "google_calendar" as const }, timestamp: timestampWindow } : {}) }, orderBy: [{ timestamp: "desc" }, { id: "desc" }], take: RECENT_EVENT_LIMIT }),
+    isWindowed
+      ? Promise.resolve([])
+      : prisma.workEvent.findMany({ where: { projectId, source: "google_calendar", timestamp: { gte: new Date(Date.now() - 30 * 86_400_000) } }, orderBy: { timestamp: "asc" }, take: CALENDAR_EVENT_LIMIT }),
   ]);
-  const events = prioritizeAiEvents(mergeAiContextEvents(recentRows.map(toWorkEvent), calendarRows.map(toWorkEvent)));
+  const recentEvents = recentRows.map(toWorkEvent);
+  const events = prioritizeAiEvents(mergeAiContextEvents(recentEvents, calendarRows.map(toWorkEvent)));
   const project = toProject(projectRow);
-  return { project, rules, events, promptContext: boundedPromptContext(project, rules, events) };
+  const effectiveRules = isWindowed
+    ? buildRulesContext(projectId, recentEvents, recentEvents.length, now)
+    : rules!;
+  return { project, rules: effectiveRules, events, promptContext: boundedPromptContext(project, effectiveRules, events) };
 }

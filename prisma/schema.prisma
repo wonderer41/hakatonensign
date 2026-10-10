@@ -24,6 +24,7 @@ model Project {
   updatedAt   DateTime    @updatedAt
   workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   events      WorkEvent[]
+  telegramCatchupCheckpoints TelegramCatchupCheckpoint[]
 
   @@index([workspaceId, updatedAt])
 }
@@ -65,4 +66,16 @@ model WorkEvent {
 
   @@unique([projectId, source, externalId])
   @@index([projectId, timestamp])
+}
+
+model TelegramCatchupCheckpoint {
+  id               String   @id @default(uuid()) @db.Uuid
+  telegramChatId   String   @db.VarChar(32)
+  telegramUserId   String   @db.VarChar(32)
+  projectId        String   @db.Uuid
+  checkpointAt     DateTime
+  updatedAt        DateTime @updatedAt
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([telegramChatId, telegramUserId, projectId], map: "telegram_catchup_scope_key")
 }

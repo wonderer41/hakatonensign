@@ -2,7 +2,7 @@ import "dotenv/config";
 import { loadGitHubAutoSyncConfig } from "@/lib/integrations/github/config";
 import { GitHubAutoSync } from "@/lib/integrations/github/polling";
 import { TelegramClient } from "@/lib/integrations/telegram/client";
-import { continuumReader } from "@/lib/integrations/telegram/commands";
+import { continuumReader, TELEGRAM_COMMANDS } from "@/lib/integrations/telegram/commands";
 import { loadTelegramConfig } from "@/lib/integrations/telegram/config";
 import { notifyNewGitHubEvents } from "@/lib/integrations/telegram/notifications";
 import { pollTelegram } from "@/lib/integrations/telegram/polling";
@@ -11,6 +11,7 @@ async function main(): Promise<void> {
   const config = loadTelegramConfig();
   const client = new TelegramClient(config.token);
   const bot = await client.getMe();
+  await client.setMyCommands(TELEGRAM_COMMANDS);
   const botName = bot.username ? `@${bot.username}` : "Telegram bot";
 
   if (config.allowedChatIds.size === 0) {

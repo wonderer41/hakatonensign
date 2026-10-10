@@ -4,23 +4,22 @@ import { listProjects } from "@/lib/db/projects";
 import { aggregateProjectAiContext, type ProjectAiContext } from "@/lib/ai/context";
 import { answerProjectQuestion } from "@/lib/ai/service";
 import { isSafeExternalUrl } from "@/lib/ai/safety";
+import { catchupCheckpointStore, type CatchupCheckpointStore } from "./catchup-checkpoints";
 import type { AiContextResponse, AiMode, ContextSummary, Project, WorkEvent } from "@/types/contracts";
 
-export const START_MESSAGE = `Welcome to Continuum! Your work, connected.
+export const TELEGRAM_COMMANDS = [
+  { command: "start", description: "Start Continuum" },
+  { command: "help", description: "Show available commands" },
+  { command: "status", description: "Project health summary" },
+  { command: "resume", description: "Resume meaningful project work" },
+  { command: "catchup", description: "Summarize changes since last catchup" },
+  { command: "next", description: "Get one evidence-based next action" },
+  { command: "meeting", description: "Prepare for the next project meeting" },
+] as const;
 
-Commands:
-/status — Recent project activity
-/resume — Pick up where you left off
-/help — Show available commands`;
-
-export const HELP_MESSAGE = `Continuum commands:
-/status — Recent project activity
-/resume — Pick up where you left off
-/help — Show available commands`;
-
-export const AI_COMMANDS_MESSAGE = `/catchup - Recover recent project context
-/next - Get one recommended next action
-/meeting - Prepare for the next project meeting`;
+const commandDescriptions = TELEGRAM_COMMANDS.map(({ command, description }) => `/${command} — ${description}`).join("\n");
+export const HELP_MESSAGE = `Continuum commands:\n${commandDescriptions}`;
+export const START_MESSAGE = `Welcome to Continuum! Your work, connected.\n\n${HELP_MESSAGE}`;
 
 const TELEGRAM_AI_QUESTIONS: Record<AiMode, string> = {
   catch_up: "Summarize recent meaningful progress, unfinished work, and the most important next action.",
@@ -31,7 +30,7 @@ const TELEGRAM_AI_QUESTIONS: Record<AiMode, string> = {
 const TELEGRAM_MESSAGE_LIMIT = 3_800;
 
 export interface AiRecoveryServices {
-  aggregateProjectAiContext(projectId: string): Promise<ProjectAiContext>;
+  aggregateProjectAiContext(projectId: string, options?: { since?: Date; sinceInclusive?: boolean }): Promise<ProjectAiContext>;
   answerProjectQuestion(question: string, context: ProjectAiContext, mode: AiMode): Promise<AiContextResponse>;
 }
 
@@ -41,6 +40,7 @@ function plainText(value: string, maxLength: number): string {
   return value
     .replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/gi, "$1")
     .replace(/https?:\/\/\S+/gi, "")
+    .replace(/\b\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})?)?\b/gi, "")
     .replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
@@ -99,7 +99,7 @@ function buildAiMessage(mode: AiMode, projectName: string, response: AiContextRe
   } else if (mode === "next_action") {
     const action = plainText(response.nextSteps[0] ?? "", 650) || "No evidence-backed next action was identified.";
     const reason = plainText(response.answer, 900) || "The available project activity does not support a more specific reason.";
-    body = `${header}\n\n${action}\n\nWhy: ${reason}`;
+    body = `${header}\n\nSuggested action: ${action}\n\nWhy (from project context): ${reason}`;
   } else {
     const meeting = events
       .filter((event) => event.source === "google_calendar" && eventStart(event) >= now)
@@ -135,6 +135,47 @@ export async function buildAiRecoveryMessage(
   return buildAiMessage(mode, context.project.name, response, context.events);
 }
 
+export async function buildCatchupMessage(
+  projectId: string,
+  telegramChatId: string,
+  telegramUserId: string,
+  services: AiRecoveryServices = defaultAiRecoveryServices,
+  checkpoints: CatchupCheckpointStore = catchupCheckpointStore,
+  now = new Date(),
+): Promise<{ text: string; checkpointAt: Date }> {
+  const previousCheckpoint = await checkpoints.get(telegramChatId, telegramUserId, projectId);
+  const since = previousCheckpoint ?? new Date(now.getTime() - 72 * 60 * 60 * 1_000);
+  const context = await services.aggregateProjectAiContext(projectId, { since, sinceInclusive: previousCheckpoint === null });
+  const windowLabel = previousCheckpoint
+    ? "Since your previous successful /catchup"
+    : "First catchup: looking back 72 hours";
+
+  if (context.events.length === 0) {
+    return {
+      text: `${plainText(context.project.name, 100)} · Catch me up\n${windowLabel}\n\nNo meaningful project changes in this window.`,
+      checkpointAt: now,
+    };
+  }
+
+  const response = await services.answerProjectQuestion(TELEGRAM_AI_QUESTIONS.catch_up, context, "catch_up");
+  const summary = plainText(response.answer, 1_300);
+  if (!summary) throw new Error("AI catchup response was incomplete");
+  const action = plainText(response.nextSteps[0] ?? "", 450);
+  const normalizedSummary = summary.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ");
+  const normalizedAction = action.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const pieces = [
+    `${plainText(context.project.name, 100)} · Catch me up`,
+    windowLabel,
+    summary,
+    ...(action && (!normalizedAction || !normalizedSummary.includes(normalizedAction)) ? [`Suggested next action: ${action}`] : []),
+  ];
+  const links = sourceLinks(response, context.events);
+  if (links.length) pieces.push(`Sources:\n${links.join("\n")}`);
+  const text = pieces.join("\n\n");
+  if (text.length > TELEGRAM_MESSAGE_LIMIT) throw new Error("AI catchup response exceeded the Telegram message limit");
+  return { text, checkpointAt: now };
+}
+
 export interface ContinuumReader {
   getProject(projectId: string): Promise<Project | null>;
   getRecentEvents(projectId: string): Promise<WorkEvent[]>;
@@ -146,7 +187,7 @@ export const continuumReader: ContinuumReader = {
     const projects = await listProjects();
     return projects.find((project) => project.id === projectId) ?? null;
   },
-  getRecentEvents: (projectId) => listRecentEvents(projectId, 20),
+  getRecentEvents: (projectId) => listRecentEvents(projectId, 200),
   getContext: getProjectContext,
 };
 
@@ -154,58 +195,50 @@ function projectNotFound(projectId: string): Error {
   return new Error(`Configured Continuum project ${projectId} was not found`);
 }
 
-function bulletItems(items: string[], empty: string): string {
-  return items.length > 0 ? items.map((item) => `• ${item}`).join("\n") : empty;
+export function formatStatus(project: Project, context: ContextSummary): string {
+  const active = context.inProgress.slice(0, 2).map((item) => plainText(item.text, 240));
+  const completed = context.completed.slice(0, 1).map((item) => plainText(item.text, 240));
+  const blockers = context.blockers.slice(0, 2).map((item) => plainText(item.text, 240));
+  const lines = [plainText(project.name, 100), `Active work: ${active.length ? active.join("; ") : "none recorded"}`, `Completed: ${completed.length ? completed.join("; ") : "none recorded"}`];
+  if (blockers.length) lines.push(`Blockers: ${blockers.join("; ")}`);
+  return lines.join("\n").slice(0, TELEGRAM_MESSAGE_LIMIT);
 }
 
-function pullRequestStatus(events: WorkEvent[]): string[] {
-  const prs = new Map<string, "open" | "merged">();
-  for (const event of [...events].reverse()) {
-    if (!event.action.startsWith("pr_")) continue;
-    const number = typeof event.metadata.prNumber === "number"
-      ? String(event.metadata.prNumber)
-      : event.externalId?.match(/:pr:([^:]+)/)?.[1];
-    if (!number) continue;
-    const key = `${event.metadata.repository ?? "github"}:${number}`;
-    if (event.action === "pr_merged") prs.set(key, "merged");
-    if (event.action === "pr_opened" && !prs.has(key)) prs.set(key, "open");
+function evidenceLinks(items: { evidenceEventIds: string[] }[], events: WorkEvent[], limit = 2): string[] {
+  const byId = new Map(events.map((event) => [event.id, event]));
+  const seen = new Set<string>();
+  const links: string[] = [];
+  for (const item of items) {
+    for (const id of item.evidenceEventIds) {
+      const event = byId.get(id);
+      if (!event || seen.has(id) || !isSafeExternalUrl(event.sourceUrl)) continue;
+      seen.add(id);
+      const source = event.source === "google_calendar" ? "Calendar" : event.source === "github" ? "GitHub" : event.source === "jira" ? "Jira" : "Source";
+      links.push(`${source}: ${event.sourceUrl}`);
+      if (links.length === limit) return links;
+    }
   }
-  return [...prs.entries()].slice(0, 5).map(([key, state]) => {
-    const number = key.split(":").at(-1);
-    return `PR #${number} ${state}`;
-  });
+  return links;
 }
 
-export function formatStatus(project: Project, events: WorkEvent[]): string {
-  const githubActivity = events
-    .filter((event) => event.source === "github")
-    .slice(0, 5)
-    .map((event) => event.summary);
-  const prs = pullRequestStatus(events);
-
-  return `${project.name}
-${events.length} recent events
-
-Recent GitHub activity:
-${bulletItems(githubActivity, "No recent GitHub activity.")}
-
-Pull requests:
-${bulletItems(prs, "No recent pull request activity.")}`;
+function isPullRequestOrCommit(text: string): boolean {
+  return /\b(?:PR\s*#?\d*|pull request|commit(?:s)?)\b/i.test(text);
 }
 
-export function formatResume(project: Project, context: ContextSummary): string {
-  const section = (title: string, items: { text: string }[], empty: string) =>
-    `${title}:\n${bulletItems(items.map((item) => item.text), empty)}`;
-
-  return `${project.name} — Resume my work
-
-${section("Completed", context.completed, "Nothing confirmed completed yet.")}
-
-${section("In Progress", context.inProgress, "Nothing currently in progress.")}
-
-${section("Blockers", context.blockers, "No blockers reported.")}
-
-${section("Next Steps", context.nextSteps, "No next steps suggested yet.")}`;
+export function formatResume(project: Project, context: ContextSummary, events: WorkEvent[] = []): string {
+  const leftOff = context.inProgress.find((item) => !isPullRequestOrCommit(item.text));
+  const completedMeaningful = context.completed.find((item) => !isPullRequestOrCommit(item.text));
+  const nextAction = context.nextSteps.find((item) => !isPullRequestOrCommit(item.text));
+  const leftOffText = leftOff?.text ?? (completedMeaningful ? "Recent tracked work is reflected in completed activity." : "No active tracked work is recorded yet.");
+  const actionText = nextAction?.text ?? (leftOff ? "Continue the active project work." : "No evidence-backed next action is available yet.");
+  const lines = [
+    `${plainText(project.name, 100)} — Resume`,
+    `Where work left off: ${plainText(leftOffText, 500)}`,
+    `Suggested next action: ${plainText(actionText, 500)}`,
+  ];
+  const links = evidenceLinks([...(leftOff ? [leftOff] : []), ...(nextAction ? [nextAction] : [])], events);
+  if (links.length) lines.push(`Sources: ${links.join(" · ")}`);
+  return lines.join("\n\n").slice(0, TELEGRAM_MESSAGE_LIMIT);
 }
 
 export async function getProjectOrThrow(reader: ContinuumReader, projectId: string): Promise<Project> {
@@ -215,17 +248,18 @@ export async function getProjectOrThrow(reader: ContinuumReader, projectId: stri
 }
 
 export async function buildStatusMessage(reader: ContinuumReader, projectId: string): Promise<string> {
-  const [project, events] = await Promise.all([
-    getProjectOrThrow(reader, projectId),
-    reader.getRecentEvents(projectId),
-  ]);
-  return formatStatus(project, events);
-}
-
-export async function buildResumeMessage(reader: ContinuumReader, projectId: string): Promise<string> {
   const [project, context] = await Promise.all([
     getProjectOrThrow(reader, projectId),
     reader.getContext(projectId),
   ]);
-  return formatResume(project, context);
+  return formatStatus(project, context);
+}
+
+export async function buildResumeMessage(reader: ContinuumReader, projectId: string): Promise<string> {
+  const [project, context, events] = await Promise.all([
+    getProjectOrThrow(reader, projectId),
+    reader.getContext(projectId),
+    reader.getRecentEvents(projectId),
+  ]);
+  return formatResume(project, context, events);
 }

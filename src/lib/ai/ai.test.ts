@@ -3,6 +3,7 @@ import test from "node:test";
 import type { Project, WorkEvent } from "@/types/contracts";
 import { loadAiConfig } from "./config";
 import { mergeAiContextEvents, prioritizeAiEvents } from "./context";
+import { buildRulesContext } from "@/lib/context/rules";
 import { isSafeExternalUrl } from "./safety";
 import { modeInstructions, parseAiMode, parseOpenAiResponse, SYSTEM_PROMPT, validateResponse } from "./service";
 
@@ -18,6 +19,22 @@ const project: Project = {
 function event(id: string, source: WorkEvent["source"], timestamp: string, metadata: Record<string, unknown> = {}, action: WorkEvent["action"] = "task_updated"): WorkEvent {
   return { id, projectId: project.id, source, externalId: id, timestamp, actor: "demo", action, summary: id, sourceUrl: `https://example.com/${id}`, metadata, createdAt: timestamp };
 }
+
+test("deterministic context keeps meetings and commits out of in-progress work", () => {
+  const now = new Date("2026-01-10T12:00:00.000Z");
+  const activeIssue = event("active-issue", "jira", "2026-01-10T10:00:00.000Z", { issueKey: "ABC-1", title: "Active issue", status: "In Progress" }, "issue_updated");
+  const completedIssue = event("completed-issue", "jira", "2026-01-10T11:00:00.000Z", { issueKey: "ABC-2", title: "Finished issue", status: "Done" }, "issue_closed");
+  const meeting = event("meeting", "google_calendar", "2026-01-10T09:00:00.000Z", { title: "Planning", start: "2026-01-11T09:00:00.000Z", end: "2026-01-11T10:00:00.000Z" });
+  const commit = event("commit", "github", "2026-01-10T11:30:00.000Z", { repository: "demo/repo", branch: "feature/demo" }, "commit_pushed");
+  const blocker = event("blocker", "manual", "2026-01-10T11:45:00.000Z", {}, "note_added");
+  blocker.summary = "Blocked waiting for review";
+
+  const summary = buildRulesContext(project.id, [meeting, commit, activeIssue, completedIssue, blocker], 5, now);
+  assert.deepEqual(summary.inProgress.map((item) => item.text), ["ABC-1 is open: Active issue"]);
+  assert.equal(summary.completed.some((item) => item.text.includes("ABC-2")), true);
+  assert.deepEqual(summary.blockers.map((item) => item.evidenceEventIds), [["blocker"]]);
+  assert.equal(summary.nextSteps.some((item) => item.text.includes("feature/demo")), true);
+});
 
 const validProviderPayload = { answer: "Known", whereWeLeftOff: "Known", nextSteps: [], blockers: [], upcomingMeetings: [], evidenceEventIds: [], confidence: "medium" };
 

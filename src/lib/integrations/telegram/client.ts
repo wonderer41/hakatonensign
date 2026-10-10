@@ -6,6 +6,7 @@ export interface TelegramChat {
 export interface TelegramMessage {
   message_id: number;
   chat: TelegramChat;
+  from?: { id: number };
   text?: string;
 }
 
@@ -39,6 +40,10 @@ export class TelegramClient {
 
   async getMe(): Promise<{ username?: string }> {
     return this.call<{ username?: string }>("getMe");
+  }
+
+  async setMyCommands(commands: readonly { command: string; description: string }[]): Promise<void> {
+    await this.call<boolean>("setMyCommands", { commands });
   }
 
   async getUpdates(offset: number | null, timeoutSeconds: number, signal: AbortSignal): Promise<TelegramUpdate[]> {

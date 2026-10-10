@@ -12,7 +12,6 @@ const DONE_STATUSES = new Set(["done", "completed", "complete", "closed", "resol
 const BLOCKED_STATUSES = new Set(["blocked", "on_hold", "on hold"]);
 const BLOCKER_TEXT = /\b(block(ed|er|ing)?|waiting (for|on)|stuck)\b/i;
 const MAIN_BRANCHES = new Set(["main", "master", "develop", "dev"]);
-const RECENT_CALENDAR_DAYS = 7;
 
 type Kind = "pr" | "issue" | "task";
 
@@ -157,19 +156,8 @@ export function buildRulesContext(
 
   for (const event of chronological) {
     if (event.source === "google_calendar") {
-      const title = str(event.metadata.title) ?? event.summary;
-      const start = str(event.metadata.start) ?? event.timestamp;
-      const end = str(event.metadata.end) ?? start;
-      const startAt = new Date(start);
-      const endAt = new Date(end);
-      const recentCutoff = now.getTime() - RECENT_CALENDAR_DAYS * 86_400_000;
-      const cite = { evidenceEventIds: [event.id], at: event.timestamp };
-
-      if (!Number.isNaN(startAt.getTime()) && startAt.getTime() >= now.getTime()) {
-        inProgress.push({ text: `Upcoming meeting: ${title} (${start})`, ...cite });
-      } else if (!Number.isNaN(endAt.getTime()) && endAt.getTime() >= recentCutoff) {
-        inProgress.push({ text: `Recent calendar event: ${title} (${start})`, ...cite });
-      }
+      // Calendar events are scheduled context, not unfinished work. They remain
+      // available to the dedicated Upcoming Meetings view and AI context.
       continue;
     }
 
@@ -213,15 +201,11 @@ export function buildRulesContext(
         if (BLOCKER_TEXT.test(event.summary) || hasBlockedLabel(event)) {
           blockers.push({ text: `Noted by ${event.actor}: ${event.summary}`, ...cite });
           nextSteps.push({ text: `Follow up on: ${event.summary}`, ...cite });
-        } else {
-          inProgress.push({ text: `Note from ${event.actor}: ${event.summary}`, ...cite });
         }
         break;
       default:
         if (hasBlockedLabel(event)) {
           blockers.push({ text: event.summary, ...cite });
-        } else {
-          inProgress.push({ text: event.summary, ...cite });
         }
     }
   }
@@ -264,9 +248,8 @@ export function buildRulesContext(
   for (const [branch, commits] of commitsByBranch) {
     const latest = commits[commits.length - 1];
     const cite = { evidenceEventIds: evidence(commits), at: latest.timestamp };
-    const count = commits.length === 1 ? "1 commit" : `${commits.length} commits`;
-    const latestText = latest.summary.replace(/^Pushed commit\s+/i, "");
-    inProgress.push({ text: `${count} pushed to ${branch} (latest: ${latestText})`, ...cite });
+    // Commits are activity evidence, not proof of unfinished work. The event
+    // timeline retains the full commit history.
     if (knownBranches.has(branch) && !MAIN_BRANCHES.has(branch) && !branchesWithPr.has(branch)) {
       nextSteps.push({ text: `Consider opening a PR for ${branch}`, ...cite });
     }
