@@ -70,6 +70,8 @@ export interface AiContextResponse {
   confidence: "high" | "medium" | "low";
 }
 
+export type AiMode = "catch_up" | "next_action" | "meeting_prep";
+
 export interface PaginatedEvents {
   data: WorkEvent[];
   nextCursor: string | null;
