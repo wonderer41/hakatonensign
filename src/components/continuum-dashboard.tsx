@@ -28,7 +28,9 @@ type IconName =
   | "external"
   | "layers"
   | "target"
-  | "trash";
+  | "trash"
+  | "dots"
+  | "pencil";
 
 function Icon({
   name,
@@ -85,6 +87,10 @@ function Icon({
       return <svg {...common}><path d="m12 3 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5M3 16l9 5 9-5" /></svg>;
     case "trash":
       return <svg {...common}><path d="M4 7h16M10 11v6M14 11v6" /><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4.5h6V7" /></svg>;
+    case "dots":
+      return <svg {...common}><circle cx="5" cy="12" r="1" fill="currentColor" /><circle cx="12" cy="12" r="1" fill="currentColor" /><circle cx="19" cy="12" r="1" fill="currentColor" /></svg>;
+    case "pencil":
+      return <svg {...common}><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4 11.5-11.5Z" /></svg>;
     case "target":
       return <svg {...common}><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4.5" /><path d="m12 12 6-6" /></svg>;
   }
@@ -259,9 +265,13 @@ export default function ContinuumDashboard() {
   const [creatingProject, setCreatingProject] = useState(false);
   const [createError, setCreateError] = useState("");
   const [olderLoading, setOlderLoading] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [openMenuProjectId, setOpenMenuProjectId] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
   const [deletingProject, setDeletingProject] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [renameTarget, setRenameTarget] = useState<Project | null>(null);
+  const [renamingProject, setRenamingProject] = useState(false);
+  const [renameError, setRenameError] = useState("");
 
   const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? null;
   const isDetailsLoading = detailsLoading || (Boolean(selectedProjectId) && !summary && !detailsError);
@@ -322,6 +332,22 @@ export default function ContinuumDashboard() {
     return () => controller.abort();
   }, [selectedProjectId, refreshToken]);
 
+  useEffect(() => {
+    if (!openMenuProjectId) return;
+    function closeOnOutsideClick(event: MouseEvent) {
+      if (!(event.target instanceof Element) || !event.target.closest(".project-menu-root")) setOpenMenuProjectId("");
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpenMenuProjectId("");
+    }
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [openMenuProjectId]);
+
   async function createProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -353,25 +379,67 @@ export default function ContinuumDashboard() {
     }
   }
 
-  async function deleteSelectedProject() {
-    if (!selectedProject) return;
+  function openRename(project: Project) {
+    setOpenMenuProjectId("");
+    setRenameError("");
+    setRenameTarget(project);
+  }
+
+  function openDelete(project: Project) {
+    setOpenMenuProjectId("");
+    setDeleteError("");
+    setDeleteTarget(project);
+  }
+
+  async function renameProject(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!renameTarget) return;
+    const name = String(new FormData(event.currentTarget).get("name") ?? "").trim();
+    if (!name) return;
+    if (name === renameTarget.name) {
+      setRenameTarget(null);
+      return;
+    }
+
+    setRenamingProject(true);
+    setRenameError("");
+    try {
+      const result = await requestJson<{ data: Project }>(`/api/projects/${encodeURIComponent(renameTarget.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      setProjects((current) => current.map((project) => (project.id === result.data.id ? result.data : project)));
+      setRenameTarget(null);
+    } catch (error) {
+      setRenameError(error instanceof Error ? error.message : "Could not rename project.");
+    } finally {
+      setRenamingProject(false);
+    }
+  }
+
+  async function deleteTargetProject() {
+    if (!deleteTarget) return;
+    const target = deleteTarget;
     setDeletingProject(true);
     setDeleteError("");
     try {
-      const response = await fetch(`/api/projects/${encodeURIComponent(selectedProject.id)}`, { method: "DELETE" });
+      const response = await fetch(`/api/projects/${encodeURIComponent(target.id)}`, { method: "DELETE" });
       // 404 means it is already gone, which is the outcome we wanted.
       if (!response.ok && response.status !== 404) {
         const body = (await response.json().catch(() => null)) as ApiError | null;
         throw new Error(body?.error?.message ?? "Could not delete project.");
       }
-      const remaining = projects.filter((project) => project.id !== selectedProject.id);
+      const remaining = projects.filter((project) => project.id !== target.id);
       setProjects(remaining);
-      setSummary(null);
-      setEventPage({ data: [], nextCursor: null });
-      setDetailsError("");
-      setDetailsLoading(Boolean(remaining[0]));
-      setSelectedProjectId(remaining[0]?.id ?? "");
-      setShowDeleteConfirm(false);
+      if (target.id === selectedProjectId) {
+        setSummary(null);
+        setEventPage({ data: [], nextCursor: null });
+        setDetailsError("");
+        setDetailsLoading(Boolean(remaining[0]));
+        setSelectedProjectId(remaining[0]?.id ?? "");
+      }
+      setDeleteTarget(null);
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : "Could not delete project.");
     } finally {
@@ -380,6 +448,7 @@ export default function ContinuumDashboard() {
   }
 
   function selectProject(projectId: string) {
+    setOpenMenuProjectId("");
     if (projectId === selectedProjectId) return;
     setDetailsLoading(true);
     setDetailsError("");
@@ -461,16 +530,34 @@ export default function ContinuumDashboard() {
           <div className="sidebar-project-list">
             {projectsLoading ? (
               <div className="sidebar-skeleton" />
-            ) : projects.length ? projects.slice(0, 5).map((project) => (
-              <button
-                className={`project-nav-item ${project.id === selectedProjectId ? "project-nav-selected" : ""}`}
+            ) : projects.length ? projects.map((project) => (
+              <div
+                className={`project-nav-row project-menu-root ${project.id === selectedProjectId ? "project-nav-selected" : ""} ${project.id === openMenuProjectId ? "project-nav-menu-open" : ""}`}
                 key={project.id}
-                onClick={() => selectProject(project.id)}
-                type="button"
               >
-                <span className="project-nav-dot" />
-                <span className="truncate">{project.name}</span>
-              </button>
+                <button className="project-nav-item" onClick={() => selectProject(project.id)} type="button">
+                  <span className="project-nav-dot" />
+                  <span className="truncate">{project.name}</span>
+                </button>
+                {project.id === selectedProjectId && <button
+                  aria-expanded={project.id === openMenuProjectId}
+                  aria-haspopup="menu"
+                  aria-label={`Options for ${project.name}`}
+                  className="project-nav-more"
+                  onClick={() => setOpenMenuProjectId((current) => (current === project.id ? "" : project.id))}
+                  type="button"
+                ><Icon name="dots" size={15} /></button>}
+                {project.id === openMenuProjectId && (
+                  <div className="project-menu" role="menu">
+                    <button className="project-menu-item" onClick={() => openRename(project)} role="menuitem" type="button">
+                      <Icon name="pencil" size={13} />Rename
+                    </button>
+                    <button className="project-menu-item project-menu-danger" onClick={() => openDelete(project)} role="menuitem" type="button">
+                      <Icon name="trash" size={13} />Delete
+                    </button>
+                  </div>
+                )}
+              </div>
             )) : (
               <p className="px-3 py-2 text-xs leading-5 text-slate-600">Your projects will appear here.</p>
             )}
@@ -510,29 +597,6 @@ export default function ContinuumDashboard() {
                 <p className="eyebrow page-eyebrow"><span className="eyebrow-spark"><Icon name="spark" size={13} /></span> YOUR WORK, CONNECTED</p>
                 <h1>Good work, in focus.</h1>
                 <p className="page-subtitle">Everything moving across your projects, with the context to keep going.</p>
-              </div>
-              <div className="project-select-wrap">
-                <label className="eyebrow" htmlFor="project-select">CURRENT PROJECT</label>
-                <div className="project-select-box">
-                  <Icon name="folder" size={16} className="text-cyan-300" />
-                  <select
-                    id="project-select"
-                    onChange={(event) => selectProject(event.target.value)}
-                    value={selectedProjectId}
-                    disabled={!projects.length || projectsLoading}
-                  >
-                    {projects.length ? projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>) : <option value="">No projects yet</option>}
-                  </select>
-                  <Icon name="chevron" size={15} className="text-slate-500" />
-                </div>
-                {selectedProject && (
-                  <button
-                    className="delete-project-link"
-                    disabled={projectsLoading}
-                    onClick={() => { setShowDeleteConfirm(true); setDeleteError(""); }}
-                    type="button"
-                  ><Icon name="trash" size={13} /> Delete project</button>
-                )}
               </div>
             </div>
 
@@ -697,18 +761,39 @@ export default function ContinuumDashboard() {
         </div>
       )}
 
-      {showDeleteConfirm && selectedProject && (
-        <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !deletingProject) setShowDeleteConfirm(false); }}>
+      {renameTarget && (
+        <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !renamingProject) setRenameTarget(null); }}>
+          <section aria-labelledby="rename-project-title" aria-modal="true" className="project-modal" role="dialog">
+            <button aria-label="Close" className="modal-close icon-button" disabled={renamingProject} onClick={() => setRenameTarget(null)} type="button">×</button>
+            <span className="modal-icon"><Icon name="pencil" size={20} /></span>
+            <p className="eyebrow mt-5">A BETTER NAME</p>
+            <h2 id="rename-project-title">Rename project</h2>
+            <p className="modal-description">Currently “{renameTarget.name}”.</p>
+            <form className="project-form" onSubmit={renameProject}>
+              <label htmlFor="rename-project-name">Project name</label>
+              <input autoFocus defaultValue={renameTarget.name} id="rename-project-name" maxLength={120} name="name" onFocus={(event) => event.currentTarget.select()} required />
+              {renameError && <p className="form-error" role="alert">{renameError}</p>}
+              <div className="modal-actions">
+                <button className="secondary-button" disabled={renamingProject} onClick={() => setRenameTarget(null)} type="button">Cancel</button>
+                <button className="primary-button" disabled={renamingProject} type="submit">{renamingProject ? "Saving…" : "Save name"}<Icon name="check" size={15} /></button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !deletingProject) setDeleteTarget(null); }}>
           <section aria-labelledby="delete-project-title" aria-modal="true" className="project-modal" role="alertdialog">
-            <button aria-label="Close" className="modal-close icon-button" disabled={deletingProject} onClick={() => setShowDeleteConfirm(false)} type="button">×</button>
+            <button aria-label="Close" className="modal-close icon-button" disabled={deletingProject} onClick={() => setDeleteTarget(null)} type="button">×</button>
             <span className="modal-icon modal-icon-danger"><Icon name="trash" size={20} /></span>
             <p className="eyebrow mt-5">THIS CAN’T BE UNDONE</p>
-            <h2 id="delete-project-title">Delete “{selectedProject.name}”?</h2>
+            <h2 id="delete-project-title">Delete “{deleteTarget.name}”?</h2>
             <p className="modal-description">The project and all of its activity events will be permanently removed. Synced GitHub activity can be pulled in again later.</p>
             {deleteError && <p className="form-error" role="alert">{deleteError}</p>}
             <div className="modal-actions">
-              <button autoFocus className="secondary-button" disabled={deletingProject} onClick={() => setShowDeleteConfirm(false)} type="button">Cancel</button>
-              <button className="danger-button" disabled={deletingProject} onClick={deleteSelectedProject} type="button">
+              <button autoFocus className="secondary-button" disabled={deletingProject} onClick={() => setDeleteTarget(null)} type="button">Cancel</button>
+              <button className="danger-button" disabled={deletingProject} onClick={deleteTargetProject} type="button">
                 <Icon name="trash" size={14} />{deletingProject ? "Deleting…" : "Delete project"}
               </button>
             </div>

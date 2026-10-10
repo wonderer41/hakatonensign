@@ -5,6 +5,7 @@ import {
   type CreateProjectRequest,
   type EventAction,
   type EventSource,
+  type UpdateProjectRequest,
 } from "@/types/contracts";
 import { HttpError } from "./http";
 
@@ -55,6 +56,11 @@ export function parseCreateProject(body: unknown): Required<CreateProjectRequest
     name: requiredString(body, "name", 120),
     description: optionalString(body, "description", 1000),
   };
+}
+
+export function parseUpdateProject(body: unknown): UpdateProjectRequest {
+  if (!isPlainObject(body)) fail("Request body must be a JSON object");
+  return { name: requiredString(body, "name", 120) };
 }
 
 export type ValidatedEventInput = Required<CreateEventRequest> & {
