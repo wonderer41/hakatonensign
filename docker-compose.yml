@@ -16,5 +16,31 @@ services:
       timeout: 5s
       retries: 10
 
+  # Applies the committed migrations in prisma/migrations once PostgreSQL is
+  # healthy, then exits. Prisma is installed inside the container (cached in a
+  # volume) so it works the same on every host OS.
+  migrate:
+    image: node:22-alpine
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    working_dir: /app
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-continuum}:${POSTGRES_PASSWORD:-continuum_dev_password}@postgres:5432/${POSTGRES_DB:-continuum}?schema=public
+    volumes:
+      - ./prisma:/app/prisma:ro
+      - ./prisma.config.ts:/app/prisma.config.ts:ro
+      - continuum-migrate-modules:/app/node_modules
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        [ -f package.json ] || echo '{"private":true}' > package.json
+        [ -x node_modules/.bin/prisma ] || npm install --no-save --no-audit --no-fund prisma@7.10.0 dotenv@17
+        npx prisma migrate deploy
+
 volumes:
   continuum-postgres-data:
+  continuum-migrate-modules:
