@@ -225,6 +225,12 @@ button { color: inherit; }
 .modal-close { position: absolute; top: 14px; right: 14px; width: 30px; height: 30px; font-size: 21px; line-height: 1; }
 .modal-icon { display: grid; width: 41px; height: 41px; place-items: center; border: 1px solid rgba(96, 206, 220, .2); border-radius: 12px; background: rgba(96, 206, 220, .09); color: #81dbe3; }
 .project-modal h2 { margin: 8px 0 0; color: #eff4f8; font-size: 23px; font-weight: 550; letter-spacing: -.04em; }
+.modal-icon-danger { border-color: rgba(251, 113, 133, .25); background: rgba(251, 113, 133, .09); color: #fda4af; }
+.danger-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 0 13px; border: 1px solid rgba(251, 113, 133, .35); border-radius: 9px; background: rgba(225, 29, 72, .2); color: #ffd5dc; font-size: 11px; font-weight: 650; cursor: pointer; transition: .18s ease; }
+.danger-button:hover:not(:disabled) { background: rgba(225, 29, 72, .32); }
+.danger-button:disabled, .delete-project-link:disabled { cursor: wait; opacity: .55; }
+.delete-project-link { display: inline-flex; align-items: center; gap: 5px; margin-top: 7px; padding: 0; border: 0; background: transparent; color: #7c889b; font-size: 10px; cursor: pointer; transition: color .18s ease; }
+.delete-project-link:hover:not(:disabled) { color: #fda4af; }
 .modal-description { margin: 7px 0 21px; color: #8492a5; font-size: 11px; line-height: 1.6; }
 .project-form { display: grid; gap: 8px; }
 .project-form label { margin-top: 5px; color: #bac5d2; font-size: 10px; font-weight: 600; }

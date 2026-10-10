@@ -27,7 +27,8 @@ type IconName =
   | "manual"
   | "external"
   | "layers"
-  | "target";
+  | "target"
+  | "trash";
 
 function Icon({
   name,
@@ -82,6 +83,8 @@ function Icon({
       return <svg {...common}><path d="M14 4h6v6M20 4l-9 9" /><path d="M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5" /></svg>;
     case "layers":
       return <svg {...common}><path d="m12 3 9 5-9 5-9-5 9-5Z" /><path d="m3 12 9 5 9-5M3 16l9 5 9-5" /></svg>;
+    case "trash":
+      return <svg {...common}><path d="M4 7h16M10 11v6M14 11v6" /><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4.5h6V7" /></svg>;
     case "target":
       return <svg {...common}><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="4.5" /><path d="m12 12 6-6" /></svg>;
   }
@@ -256,6 +259,9 @@ export default function ContinuumDashboard() {
   const [creatingProject, setCreatingProject] = useState(false);
   const [createError, setCreateError] = useState("");
   const [olderLoading, setOlderLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletingProject, setDeletingProject] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? null;
   const isDetailsLoading = detailsLoading || (Boolean(selectedProjectId) && !summary && !detailsError);
@@ -344,6 +350,32 @@ export default function ContinuumDashboard() {
       setCreateError(error instanceof Error ? error.message : "Could not create project.");
     } finally {
       setCreatingProject(false);
+    }
+  }
+
+  async function deleteSelectedProject() {
+    if (!selectedProject) return;
+    setDeletingProject(true);
+    setDeleteError("");
+    try {
+      const response = await fetch(`/api/projects/${encodeURIComponent(selectedProject.id)}`, { method: "DELETE" });
+      // 404 means it is already gone, which is the outcome we wanted.
+      if (!response.ok && response.status !== 404) {
+        const body = (await response.json().catch(() => null)) as ApiError | null;
+        throw new Error(body?.error?.message ?? "Could not delete project.");
+      }
+      const remaining = projects.filter((project) => project.id !== selectedProject.id);
+      setProjects(remaining);
+      setSummary(null);
+      setEventPage({ data: [], nextCursor: null });
+      setDetailsError("");
+      setDetailsLoading(Boolean(remaining[0]));
+      setSelectedProjectId(remaining[0]?.id ?? "");
+      setShowDeleteConfirm(false);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Could not delete project.");
+    } finally {
+      setDeletingProject(false);
     }
   }
 
@@ -493,6 +525,14 @@ export default function ContinuumDashboard() {
                   </select>
                   <Icon name="chevron" size={15} className="text-slate-500" />
                 </div>
+                {selectedProject && (
+                  <button
+                    className="delete-project-link"
+                    disabled={projectsLoading}
+                    onClick={() => { setShowDeleteConfirm(true); setDeleteError(""); }}
+                    type="button"
+                  ><Icon name="trash" size={13} /> Delete project</button>
+                )}
               </div>
             </div>
 
@@ -653,6 +693,25 @@ export default function ContinuumDashboard() {
                 <button className="primary-button" disabled={creatingProject} type="submit">{creatingProject ? "Creating…" : "Create project"}<Icon name="arrow" size={15} /></button>
               </div>
             </form>
+          </section>
+        </div>
+      )}
+
+      {showDeleteConfirm && selectedProject && (
+        <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !deletingProject) setShowDeleteConfirm(false); }}>
+          <section aria-labelledby="delete-project-title" aria-modal="true" className="project-modal" role="alertdialog">
+            <button aria-label="Close" className="modal-close icon-button" disabled={deletingProject} onClick={() => setShowDeleteConfirm(false)} type="button">×</button>
+            <span className="modal-icon modal-icon-danger"><Icon name="trash" size={20} /></span>
+            <p className="eyebrow mt-5">THIS CAN’T BE UNDONE</p>
+            <h2 id="delete-project-title">Delete “{selectedProject.name}”?</h2>
+            <p className="modal-description">The project and all of its activity events will be permanently removed. Synced GitHub activity can be pulled in again later.</p>
+            {deleteError && <p className="form-error" role="alert">{deleteError}</p>}
+            <div className="modal-actions">
+              <button autoFocus className="secondary-button" disabled={deletingProject} onClick={() => setShowDeleteConfirm(false)} type="button">Cancel</button>
+              <button className="danger-button" disabled={deletingProject} onClick={deleteSelectedProject} type="button">
+                <Icon name="trash" size={14} />{deletingProject ? "Deleting…" : "Delete project"}
+              </button>
+            </div>
           </section>
         </div>
       )}

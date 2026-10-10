@@ -49,3 +49,9 @@ export async function assertProjectExists(projectId: string): Promise<void> {
   });
   if (!project) throw new HttpError("NOT_FOUND", "Project not found");
 }
+
+// Deletes the project and, through the database cascade, all of its events.
+export async function deleteProject(projectId: string): Promise<void> {
+  const { count } = await prisma.project.deleteMany({ where: { id: projectId } });
+  if (count === 0) throw new HttpError("NOT_FOUND", "Project not found");
+}

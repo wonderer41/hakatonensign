@@ -134,6 +134,7 @@ All endpoints return JSON in camelCase with UTC ISO 8601 timestamps. Errors alwa
 | `GET` | `/api/health` | Service health check, no database needed |
 | `GET` | `/api/projects` | List projects, most recently active first |
 | `POST` | `/api/projects` | Create a project (`name` required, `description` optional) |
+| `DELETE` | `/api/projects/{id}` | Delete a project and all of its events. Returns `204`, or `404` if it does not exist |
 | `GET` | `/api/events?projectId=&limit=&cursor=` | Project activity, newest first, paginated with `nextCursor` |
 | `POST` | `/api/events` | Ingest one event. Returns `201` when created, or `200` with `created: false` for a duplicate `externalId` |
 | `GET` | `/api/context?projectId=` | "Resume My Work" summary: completed, in progress, blockers, next steps |
@@ -203,7 +204,8 @@ src/
 │   │   ├── context/route.ts    # GET /api/context
 │   │   ├── events/route.ts     # GET, POST /api/events
 │   │   ├── health/route.ts     # GET /api/health
-│   │   └── projects/route.ts   # GET, POST /api/projects
+│   │   ├── projects/route.ts   # GET, POST /api/projects
+│   │   └── projects/[id]/route.ts  # DELETE /api/projects/{id}
 │   ├── globals.css
 │   ├── layout.tsx
 │   └── page.tsx
