@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Project, WorkEvent } from "@/types/contracts";
 import { loadAiConfig } from "./config";
-import { mergeAiContextEvents } from "./context";
+import { mergeAiContextEvents, prioritizeAiEvents } from "./context";
 import { isSafeExternalUrl } from "./safety";
-import { parseOpenAiResponse, SYSTEM_PROMPT, validateResponse } from "./service";
+import { modeInstructions, parseAiMode, parseOpenAiResponse, SYSTEM_PROMPT, validateResponse } from "./service";
 
 const project: Project = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -15,8 +15,8 @@ const project: Project = {
   updatedAt: "2026-01-01T00:00:00.000Z",
 };
 
-function event(id: string, source: WorkEvent["source"], timestamp: string): WorkEvent {
-  return { id, projectId: project.id, source, externalId: id, timestamp, actor: "demo", action: "task_updated", summary: id, sourceUrl: `https://example.com/${id}`, metadata: {}, createdAt: timestamp };
+function event(id: string, source: WorkEvent["source"], timestamp: string, metadata: Record<string, unknown> = {}, action: WorkEvent["action"] = "task_updated"): WorkEvent {
+  return { id, projectId: project.id, source, externalId: id, timestamp, actor: "demo", action, summary: id, sourceUrl: `https://example.com/${id}`, metadata, createdAt: timestamp };
 }
 
 const validProviderPayload = { answer: "Known", whereWeLeftOff: "Known", nextSteps: [], blockers: [], upcomingMeetings: [], evidenceEventIds: [], confidence: "medium" };
@@ -34,6 +34,17 @@ test("empty event context stays empty", () => {
   assert.deepEqual(mergeAiContextEvents([], []), []);
 });
 
+test("event prioritization keeps actionable Jira work and upcoming meetings", () => {
+  const now = new Date("2026-01-10T12:00:00.000Z");
+  const noise = Array.from({ length: 60 }, (_, index) => event(`commit-${index}`, "github", `2026-01-${String((index % 9) + 1).padStart(2, "0")}T10:00:00.000Z`, { repository: "demo/repo" }, "commit_pushed"));
+  const jira = event("jira-high", "jira", "2026-01-02T10:00:00.000Z", { issueKey: "ABC-1", status: "In Progress", priority: "High" }, "issue_updated");
+  const meeting = event("meeting-next", "google_calendar", "2026-01-12T15:00:00.000Z", { start: "2026-01-12T15:00:00.000Z", title: "Demo review" });
+  const selected = prioritizeAiEvents([...noise, jira, meeting], now);
+  assert.equal(selected.some((item) => item.id === jira.id), true);
+  assert.equal(selected.some((item) => item.id === meeting.id), true);
+  assert.equal(selected.length, 50);
+});
+
 test("AI configuration reports missing keys without exposing values", () => {
   assert.throws(() => loadAiConfig({ AI_PROVIDER: "openai" } as unknown as NodeJS.ProcessEnv), /AI is not configured/);
 });
@@ -45,6 +56,23 @@ test("AI configuration selects Anthropic and its model from environment", () => 
 test("provider evidence is restricted to event IDs in the context", () => {
   const response = validateResponse({ answer: "Known", whereWeLeftOff: "Known", nextSteps: [], blockers: [], upcomingMeetings: [], evidenceEventIds: ["known", "invented"], confidence: "medium" }, new Set(["known"]));
   assert.deepEqual(response.evidenceEventIds, ["known"]);
+});
+
+test("all three response modes have distinct concise instructions", () => {
+  assert.match(modeInstructions("catch_up"), /where the user left off/i);
+  assert.match(modeInstructions("next_action"), /exactly one primary/i);
+  assert.match(modeInstructions("meeting_prep"), /upcoming Calendar meeting/i);
+});
+
+test("mode is optional for backward-compatible requests", () => {
+  assert.equal(parseAiMode(undefined), "catch_up");
+  assert.equal(parseAiMode("next_action"), "next_action");
+  assert.throws(() => parseAiMode("unknown"), /mode must be/);
+});
+
+test("response lists are capped at three concise items", () => {
+  const response = validateResponse({ ...validProviderPayload, nextSteps: ["1", "2", "3", "4"], blockers: [], upcomingMeetings: [] }, new Set());
+  assert.deepEqual(response.nextSteps, ["1", "2", "3"]);
 });
 
 test("valid OpenAI Responses API structured output is parsed from output_text", () => {
