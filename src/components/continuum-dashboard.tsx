@@ -19,6 +19,7 @@ type IconName =
   | "grid"
   | "folder"
   | "clock"
+  | "calendar"
   | "calendar-check"
   | "arrow"
   | "refresh"
@@ -69,6 +70,8 @@ function Icon({
       return <svg {...common}><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5l3.5 2" /></svg>;
     case "calendar-check":
       return <svg {...common}><rect x="3.5" y="5" width="17" height="16" rx="2" /><path d="M8 3v4M16 3v4M3.5 10h17M8 15l2.5 2.5L16 12" /></svg>;
+    case "calendar":
+      return <svg {...common}><rect x="3.5" y="5" width="17" height="16" rx="2" /><path d="M8 3v4M16 3v4M3.5 10h17" /></svg>;
     case "arrow":
       return <svg {...common}><path d="M5 12h14M13 6l6 6-6 6" /></svg>;
     case "refresh":
@@ -123,7 +126,34 @@ function sourceLabel(source: EventSource): string {
 }
 
 function sourceIcon(source: EventSource): IconName {
-  return source === "github" ? "github" : source === "jira" ? "jira" : source === "google_calendar" ? "clock" : "manual";
+  return source === "github" ? "github" : source === "jira" ? "jira" : source === "google_calendar" ? "calendar" : "manual";
+}
+
+const ACTIVITY_SOURCES: { source: EventSource; title: string; subtitle: string }[] = [
+  { source: "github", title: "GitHub", subtitle: "Code changes and collaboration" },
+  { source: "jira", title: "Jira", subtitle: "Tasks and project progress" },
+  { source: "google_calendar", title: "Google Calendar", subtitle: "Meetings and scheduled events" },
+  { source: "manual", title: "Manual", subtitle: "Notes and recorded activity" },
+];
+
+function eventDate(event: WorkEvent): string {
+  return event.source === "google_calendar" ? formatCalendarDate(event) : formatLocalDateTime(event.timestamp);
+}
+
+function eventTitle(event: WorkEvent): string {
+  return event.source === "google_calendar" ? calendarText(event, "title") ?? event.summary : event.summary;
+}
+
+function jiraStatus(event: WorkEvent): string | null {
+  if (event.source !== "jira") return null;
+  const status = calendarText(event, "status");
+  if (!status) return null;
+  const normalized = status.toLowerCase().replace(/[ _-]+/g, " ").trim();
+  if (/^(to do|open|backlog|todo)$/.test(normalized)) return "To Do";
+  if (/^(in progress|in review|selected for development)$/.test(normalized)) return "In Progress";
+  if (/^(done|closed|resolved)$/.test(normalized)) return "Done";
+  if (/^blocked$/.test(normalized)) return "Blocked";
+  return status;
 }
 
 function eventActionLabel(event: WorkEvent): string {
@@ -319,6 +349,8 @@ function MetricCard({
 }
 
 function ActivityRow({ event }: { event: WorkEvent }) {
+  const status = jiraStatus(event);
+  const title = eventTitle(event);
   return (
     <article className="activity-row">
       <span className={`source-mark source-${event.source}`}>
@@ -326,20 +358,21 @@ function ActivityRow({ event }: { event: WorkEvent }) {
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <p className="text-sm font-medium text-slate-100">{event.summary}</p>
+          <p className="text-sm font-medium text-slate-100">{title}</p>
           <span className="activity-action">{eventActionLabel(event)}</span>
+          {status && <span className={`jira-status jira-status-${status.toLowerCase().replaceAll(" ", "-")}`}>{status}</span>}
         </div>
         <p className="mt-1.5 text-xs text-slate-500">
           <span className="font-medium text-slate-400">{event.actor}</span>
           <span className="mx-2 text-slate-700">·</span>
           {sourceLabel(event.source)}
           <span className="mx-2 text-slate-700">·</span>
-          <time dateTime={event.timestamp} title={formatLocalDateTime(event.timestamp)}>
-            {formatLocalDateTime(event.timestamp)}
+          <time dateTime={event.source === "google_calendar" ? calendarText(event, "start") ?? event.timestamp : event.timestamp}>
+            {eventDate(event)}
           </time>
         </p>
       </div>
-      {event.sourceUrl && (
+      {isSafeExternalUrl(event.sourceUrl) && (
         <a
           aria-label={`Open source for ${event.summary}`}
           className="icon-button ml-2 shrink-0"
@@ -351,6 +384,75 @@ function ActivityRow({ event }: { event: WorkEvent }) {
         </a>
       )}
     </article>
+  );
+}
+
+function ExpandableEventList({ events, initialCount = 8 }: { events: WorkEvent[]; initialCount?: number }) {
+  const [visibleCount, setVisibleCount] = useState(initialCount);
+  const visible = events.slice(0, visibleCount);
+  return (
+    <>
+      <div className="activity-list">{visible.map((event) => <ActivityRow event={event} key={event.id} />)}</div>
+      {visibleCount < events.length && (
+        <button className="activity-show-more" onClick={() => setVisibleCount((count) => count + initialCount)} type="button">
+          Show more ({events.length - visibleCount} remaining)
+        </button>
+      )}
+    </>
+  );
+}
+
+function GitHubActivity({ events }: { events: WorkEvent[] }) {
+  const groups = [
+    { label: "Pull Requests", events: events.filter((event) => event.action.startsWith("pr_")) },
+    { label: "Issues", events: events.filter((event) => event.action.startsWith("issue_")) },
+    { label: "Commits", events: events.filter((event) => event.action === "commit_pushed") },
+  ].filter((group) => group.events.length > 0);
+  return (
+    <div className="activity-subgroups">
+      {groups.map((group) => (
+        <details className="activity-subgroup" key={group.label}>
+          <summary><span>{group.label}</span><span>{group.events.length}</span></summary>
+          <ExpandableEventList events={group.events} initialCount={group.label === "Commits" ? 5 : 8} />
+        </details>
+      ))}
+    </div>
+  );
+}
+
+function SourceActivityCard({
+  source,
+  events,
+  highlights,
+}: {
+  source: EventSource;
+  events: WorkEvent[];
+  highlights: WorkEvent[];
+}) {
+  const config = ACTIVITY_SOURCES.find((item) => item.source === source)!;
+  return (
+    <details className={`source-activity-card source-activity-${source}`}>
+      <summary className="source-activity-summary">
+        <span className="source-activity-heading">
+          <span className={`source-mark source-${source}`}><Icon name={sourceIcon(source)} size={18} /></span>
+          <span className="source-activity-title"><strong>{config.title}</strong><small>{config.subtitle}</small></span>
+          <span className="source-activity-count">{events.length} {events.length === 1 ? "event" : "events"}</span>
+          <Icon className="source-activity-chevron" name="chevron" size={17} />
+        </span>
+        <span className="source-activity-highlights">
+          {highlights.length ? highlights.map((event) => (
+            <span className="source-activity-highlight" key={event.id}>
+              <span className="highlight-dot" />
+              <span className="highlight-copy">{eventTitle(event)}</span>
+              <time>{eventDate(event)}</time>
+            </span>
+          )) : <span className="source-activity-empty">No recent activity</span>}
+        </span>
+      </summary>
+      <div className="source-activity-expanded">
+        {source === "github" ? <GitHubActivity events={events} /> : <ExpandableEventList events={events} />}
+      </div>
+    </details>
   );
 }
 
@@ -366,6 +468,7 @@ export default function ContinuumDashboard() {
   const [detailsError, setDetailsError] = useState("");
   const [refreshToken, setRefreshToken] = useState(0);
   const [sourceFilter, setSourceFilter] = useState<"all" | EventSource>("all");
+  const [activityView, setActivityView] = useState<"source" | "timeline">("source");
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [creatingProject, setCreatingProject] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -389,9 +492,31 @@ export default function ContinuumDashboard() {
   const isDetailsLoading = detailsLoading || (Boolean(selectedProjectId) && !summary && !detailsError);
   const currentTime = summary ? new Date(summary.generatedAt).getTime() : 0;
   const filteredEvents = useMemo(
-    () => eventPage.data.filter((event) => sourceFilter === "all" || event.source === sourceFilter),
+    () => eventPage.data
+      .filter((event) => sourceFilter === "all" || event.source === sourceFilter)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime() || b.id.localeCompare(a.id)),
     [eventPage.data, sourceFilter],
   );
+  const sourceActivity = useMemo(() => {
+    const grouped = new Map<EventSource, WorkEvent[]>();
+    for (const event of filteredEvents) grouped.set(event.source, [...(grouped.get(event.source) ?? []), event]);
+    return grouped;
+  }, [filteredEvents]);
+  const displayedSources = ACTIVITY_SOURCES.filter(({ source }) =>
+    source === "manual" ? sourceFilter === "manual" || sourceActivity.has(source) : sourceFilter === "all" || sourceFilter === source,
+  );
+  const highlightsForSource = (source: EventSource): WorkEvent[] => {
+    const events = sourceActivity.get(source) ?? [];
+    if (source === "github") {
+      const meaningful = events.filter((event) => event.action.startsWith("pr_") || event.action.startsWith("issue_"));
+      return (meaningful.length ? meaningful : events).slice(0, 2);
+    }
+    if (source === "google_calendar") {
+      const upcoming = events.filter((event) => new Date(calendarText(event, "start") ?? event.timestamp).getTime() >= currentTime);
+      return (upcoming.length ? upcoming : events).slice(0, 2);
+    }
+    return events.slice(0, 2);
+  };
   const upcomingMeetings = useMemo(
     () => eventPage.data
       .filter((event) => event.source === "google_calendar")
@@ -980,30 +1105,47 @@ export default function ContinuumDashboard() {
                 <section className="activity-section" id="activity">
                   <div className="section-heading-row activity-heading-row">
                     <div><p className="eyebrow">THE LATEST FROM YOUR TOOLS</p><h2>Recent activity</h2></div>
-                    <label className="filter-select-wrap"><span className="sr-only">Filter activity by source</span>
-                      <select className="filter-select" onChange={(event) => setSourceFilter(event.target.value as "all" | EventSource)} value={sourceFilter}>
-                        <option value="all">All sources</option><option value="github">GitHub</option><option value="jira">Jira</option><option value="google_calendar">Google Calendar</option><option value="manual">Manual</option>
-                      </select><Icon name="chevron" size={14} />
-                    </label>
+                    <div className="activity-heading-tools">
+                      <div aria-label="Activity layout" className="activity-view-toggle" role="group">
+                        <button aria-pressed={activityView === "source"} onClick={() => setActivityView("source")} type="button">By Source</button>
+                        <button aria-pressed={activityView === "timeline"} onClick={() => setActivityView("timeline")} type="button">Timeline</button>
+                      </div>
+                      <label className="filter-select-wrap"><span className="sr-only">Filter activity by source</span>
+                        <select className="filter-select" onChange={(event) => setSourceFilter(event.target.value as "all" | EventSource)} value={sourceFilter}>
+                          <option value="all">All sources</option><option value="github">GitHub</option><option value="jira">Jira</option><option value="google_calendar">Google Calendar</option><option value="manual">Manual</option>
+                        </select><Icon name="chevron" size={14} />
+                      </label>
+                    </div>
                   </div>
                   <div className="activity-card">
                     {isDetailsLoading ? (
                       <div className="activity-loading"><i /><i /><i /></div>
-                    ) : filteredEvents.length ? (
+                    ) : (
                       <>
-                        <div className="activity-list">{filteredEvents.map((event) => <ActivityRow event={event} key={event.id} />)}</div>
-                        {eventPage.nextCursor && sourceFilter === "all" && (
+                        {filteredEvents.length ? activityView === "source" ? (
+                          <div className="source-activity-grid">
+                            {displayedSources.map(({ source }) => (
+                              <SourceActivityCard
+                                events={sourceActivity.get(source) ?? []}
+                                highlights={highlightsForSource(source)}
+                                key={source}
+                                source={source}
+                              />
+                            ))}
+                          </div>
+                        ) : <div className="activity-list">{filteredEvents.map((event) => <ActivityRow event={event} key={event.id} />)}</div> : (
+                          <div className="activity-empty">
+                            <span className="activity-empty-icon"><Icon name="clock" size={19} /></span>
+                            <p className="text-sm font-medium text-slate-300">{sourceFilter === "all" ? "The timeline starts here." : `No ${sourceLabel(sourceFilter).toLowerCase()} activity in the loaded events.`}</p>
+                            <p className="mt-1 text-xs leading-5 text-slate-500">When work events arrive, they’ll show up here with a link to the source.</p>
+                          </div>
+                        )}
+                        {eventPage.nextCursor && (
                           <button className="load-older-button" disabled={olderLoading} onClick={loadOlderEvents} type="button">
                             {olderLoading ? "Loading…" : "Load older activity"}<Icon name="arrow" size={14} />
                           </button>
                         )}
                       </>
-                    ) : (
-                      <div className="activity-empty">
-                        <span className="activity-empty-icon"><Icon name="clock" size={19} /></span>
-                        <p className="text-sm font-medium text-slate-300">{sourceFilter === "all" ? "The timeline starts here." : `No ${sourceLabel(sourceFilter).toLowerCase()} activity yet.`}</p>
-                        <p className="mt-1 text-xs leading-5 text-slate-500">When work events arrive, they’ll show up here with a link to the source.</p>
-                      </div>
                     )}
                   </div>
                 </section>
