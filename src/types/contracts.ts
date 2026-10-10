@@ -1,7 +1,7 @@
 // Shared API contracts. See CONTINUUM_API_CONTRACTS.md, section 3.
 // Owned by Backend (Dev 1). Import these types; do not redefine response shapes.
 
-export type EventSource = "github" | "jira" | "manual";
+export type EventSource = "github" | "jira" | "google_calendar" | "manual";
 export type EventAction =
   | "commit_pushed"
   | "pr_opened"
@@ -67,7 +67,7 @@ export interface PaginatedEvents {
 
 // Additive types for the remaining endpoint shapes in section 4.
 
-export const EVENT_SOURCES: readonly EventSource[] = ["github", "jira", "manual"];
+export const EVENT_SOURCES: readonly EventSource[] = ["github", "jira", "google_calendar", "manual"];
 export const EVENT_ACTIONS: readonly EventAction[] = [
   "commit_pushed",
   "pr_opened",
