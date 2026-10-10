@@ -12,6 +12,7 @@ const DONE_STATUSES = new Set(["done", "completed", "complete", "closed", "resol
 const BLOCKED_STATUSES = new Set(["blocked", "on_hold", "on hold"]);
 const BLOCKER_TEXT = /\b(block(ed|er|ing)?|waiting (for|on)|stuck)\b/i;
 const MAIN_BRANCHES = new Set(["main", "master", "develop", "dev"]);
+const RECENT_CALENDAR_DAYS = 7;
 
 type Kind = "pr" | "issue" | "task";
 
@@ -155,6 +156,23 @@ export function buildRulesContext(
   const nextSteps: Ranked[] = [];
 
   for (const event of chronological) {
+    if (event.source === "google_calendar") {
+      const title = str(event.metadata.title) ?? event.summary;
+      const start = str(event.metadata.start) ?? event.timestamp;
+      const end = str(event.metadata.end) ?? start;
+      const startAt = new Date(start);
+      const endAt = new Date(end);
+      const recentCutoff = now.getTime() - RECENT_CALENDAR_DAYS * 86_400_000;
+      const cite = { evidenceEventIds: [event.id], at: event.timestamp };
+
+      if (!Number.isNaN(startAt.getTime()) && startAt.getTime() >= now.getTime()) {
+        inProgress.push({ text: `Upcoming meeting: ${title} (${start})`, ...cite });
+      } else if (!Number.isNaN(endAt.getTime()) && endAt.getTime() >= recentCutoff) {
+        inProgress.push({ text: `Recent calendar event: ${title} (${start})`, ...cite });
+      }
+      continue;
+    }
+
     const ref = workItemKey(event);
     if (ref) {
       let item = items.get(ref.key);
