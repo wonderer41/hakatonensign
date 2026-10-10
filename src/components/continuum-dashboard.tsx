@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import type {
   ApiError,
+  AiContextResponse,
   ContextItem,
   ContextSummary,
   PaginatedEvents,
@@ -10,6 +11,7 @@ import type {
   WorkEvent,
   EventSource,
 } from "@/types/contracts";
+import { isSafeExternalUrl } from "@/lib/ai/safety";
 
 type IconName =
   | "spark"
@@ -349,6 +351,10 @@ export default function ContinuumDashboard() {
   const [renameTarget, setRenameTarget] = useState<Project | null>(null);
   const [renamingProject, setRenamingProject] = useState(false);
   const [renameError, setRenameError] = useState("");
+  const [aiQuestion, setAiQuestion] = useState("");
+  const [aiAnswer, setAiAnswer] = useState<AiContextResponse | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
 
   const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? null;
   const isDetailsLoading = detailsLoading || (Boolean(selectedProjectId) && !summary && !detailsError);
@@ -365,6 +371,18 @@ export default function ContinuumDashboard() {
       .slice(0, 5),
     [currentTime, eventPage.data],
   );
+  const aiEvidenceEvents = useMemo(() => {
+    if (!aiAnswer) return [];
+    const seen = new Set<string>();
+    const result: WorkEvent[] = [];
+    for (const id of aiAnswer.evidenceEventIds) {
+      const event = eventPage.data.find((candidate) => candidate.id === id);
+      if (!event || !isSafeExternalUrl(event.sourceUrl) || seen.has(event.id)) continue;
+      seen.add(event.id);
+      result.push(event);
+    }
+    return result;
+  }, [aiAnswer, eventPage.data]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -465,6 +483,27 @@ export default function ContinuumDashboard() {
     }
   }
 
+  async function askContinuum(question = aiQuestion) {
+    const trimmedQuestion = question.trim();
+    if (!selectedProjectId || !trimmedQuestion || aiLoading) return;
+    setAiQuestion(trimmedQuestion);
+    setAiLoading(true);
+    setAiError("");
+    setAiAnswer(null);
+    try {
+      const result = await requestJson<{ data: AiContextResponse }>("/api/ai/context", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: selectedProjectId, question: trimmedQuestion }),
+      });
+      setAiAnswer(result.data);
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : "Could not ask Continuum.");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
   function openRename(project: Project) {
     setOpenMenuProjectId("");
     setRenameError("");
@@ -540,6 +579,8 @@ export default function ContinuumDashboard() {
     setDetailsError("");
     setSummary(null);
     setEventPage({ data: [], nextCursor: null });
+    setAiAnswer(null);
+    setAiError("");
     setSelectedProjectId(projectId);
   }
 
@@ -685,6 +726,46 @@ export default function ContinuumDashboard() {
                 <p className="page-subtitle">Everything moving across your projects, with the context to keep going.</p>
               </div>
             </div>
+
+            <section aria-labelledby="ask-continuum-title" className="ask-section">
+              <div className="section-heading-row ask-heading-row">
+                <div><p className="eyebrow">RECOVER YOUR CONTEXT</p><h2 id="ask-continuum-title">Ask Continuum</h2></div>
+                <span className="summary-mode"><span />Grounded in project activity</span>
+              </div>
+              <form className="ask-form" onSubmit={(event) => { event.preventDefault(); void askContinuum(); }}>
+                <input aria-label="Ask Continuum a question" className="ask-input" onChange={(event) => setAiQuestion(event.target.value)} placeholder="What should I work on next?" value={aiQuestion} />
+                <button className="primary-button ask-button" disabled={aiLoading || !selectedProjectId || !aiQuestion.trim()} type="submit">{aiLoading ? "Thinking…" : "Ask"}</button>
+              </form>
+              <div className="ask-shortcuts" aria-label="Suggested questions">
+                {[
+                  "Where did we leave off?",
+                  "What should I work on next?",
+                  "What changed recently?",
+                  "What should I prepare before my next meeting?",
+                ].map((question) => <button className="ask-shortcut" key={question} onClick={() => { setAiQuestion(question); void askContinuum(question); }} type="button">{question}</button>)}
+              </div>
+              {aiError && (
+                <div className="ask-notice" role="alert">
+                  <Icon name="alert" size={16} />
+                  <span>{aiError.toLowerCase().includes("not configured") ? "AI not configured. Add OPENAI_API_KEY to enable Ask Continuum." : aiError}</span>
+                </div>
+              )}
+              {aiAnswer && (
+                <article className="ask-answer">
+                  <div className="ask-answer-heading"><span className="eyebrow">CONTINUUM SAYS</span><span className="confidence-pill">{aiAnswer.confidence} confidence</span></div>
+                  <p className="ask-answer-text">{aiAnswer.answer}</p>
+                  <div className="ask-answer-grid">
+                    <div><p className="ask-label">Where you left off</p><p className="ask-value">{aiAnswer.whereWeLeftOff}</p></div>
+                    {aiAnswer.nextSteps.length > 0 && <div><p className="ask-label">Next steps</p><ul>{aiAnswer.nextSteps.map((step) => <li key={step}>{step}</li>)}</ul></div>}
+                    {aiAnswer.blockers.length > 0 && <div><p className="ask-label">Blockers</p><ul>{aiAnswer.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}</ul></div>}
+                    {aiAnswer.upcomingMeetings.length > 0 && <div><p className="ask-label">Upcoming meetings</p><ul>{aiAnswer.upcomingMeetings.map((meeting) => <li key={meeting}>{meeting}</li>)}</ul></div>}
+                  </div>
+                  {aiEvidenceEvents.length > 0 && (
+                    <div className="ask-evidence"><p className="ask-label">Supporting evidence</p><div className="ask-evidence-links">{aiEvidenceEvents.map((event) => <a href={event.sourceUrl!} key={event.id} rel="noreferrer" target="_blank"><span>{sourceLabel(event.source)}</span><Icon name="external" size={12} /></a>)}</div></div>
+                  )}
+                </article>
+              )}
+            </section>
 
             {projectError && (
               <div className="notice notice-error" role="alert">
