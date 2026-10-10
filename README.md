@@ -59,17 +59,17 @@ The example values are development-only local credentials. External API keys are
 
 ## Start PostgreSQL
 
-Start the local database:
+Build and start the app and local database:
 
 ```powershell
-docker compose up -d
+docker compose up --build -d
 ```
 
 ```bash
-docker compose up -d
+docker compose up --build -d
 ```
 
-This also starts a short-lived `migrate` container. It waits for PostgreSQL to be healthy, applies every migration in `prisma/migrations`, and exits, so the tables are ready without any extra command. The first run takes a little longer while it installs Prisma inside the container. Check that it succeeded with:
+This starts the `app` and `postgres` containers. A short-lived `migrate` container waits for PostgreSQL to be healthy, applies every migration in `prisma/migrations`, and exits before the app starts. The first run takes longer while Docker builds the app and installs Prisma in the migration container. Check that migration succeeded with:
 
 ```bash
 docker compose logs migrate
@@ -113,17 +113,19 @@ Open Prisma Studio with `npm run db:studio` to inspect the data.
 
 ## Run the application
 
-Start the development server:
+The Docker app is available at <http://localhost:3000>. To use Next.js hot reload on the host instead, stop the app container and start the development server:
 
 ```powershell
+docker compose stop app
 npm run dev
 ```
 
 ```bash
+docker compose stop app
 npm run dev
 ```
 
-Open <http://localhost:3000>. The health endpoint is available at <http://localhost:3000/api/health>.
+The health endpoint is available at <http://localhost:3000/api/health>.
 
 ## API
 

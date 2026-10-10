@@ -41,6 +41,18 @@ services:
         [ -x node_modules/.bin/prisma ] || npm install --no-save --no-audit --no-fund prisma@7.10.0 dotenv@17
         npx prisma migrate deploy
 
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-continuum}:${POSTGRES_PASSWORD:-continuum_dev_password}@postgres:5432/${POSTGRES_DB:-continuum}?schema=public
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+
 volumes:
   continuum-postgres-data:
   continuum-migrate-modules:
