@@ -19,6 +19,7 @@ type IconName =
   | "grid"
   | "folder"
   | "clock"
+  | "calendar-check"
   | "arrow"
   | "refresh"
   | "plus"
@@ -66,6 +67,8 @@ function Icon({
       return <svg {...common}><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-10Z" /><path d="M3.5 10h17" /></svg>;
     case "clock":
       return <svg {...common}><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5l3.5 2" /></svg>;
+    case "calendar-check":
+      return <svg {...common}><rect x="3.5" y="5" width="17" height="16" rx="2" /><path d="M8 3v4M16 3v4M3.5 10h17M8 15l2.5 2.5L16 12" /></svg>;
     case "arrow":
       return <svg {...common}><path d="M5 12h14M13 6l6 6-6 6" /></svg>;
     case "refresh":
@@ -151,10 +154,10 @@ function calendarText(event: WorkEvent, field: string): string | null {
   return typeof value === "string" && value.trim() ? value : null;
 }
 
-const AI_MODES: { value: AiMode; label: string; question: string }[] = [
-  { value: "catch_up", label: "Catch Me Up", question: "Where did we leave off, and what should I know to pick things back up?" },
-  { value: "next_action", label: "Next Action", question: "What is the most useful next action I can take?" },
-  { value: "meeting_prep", label: "Meeting Prep", question: "What should I know and prepare for my next meeting?" },
+const AI_MODES: { value: AiMode; label: string; subtitle: string; icon: IconName; question: string }[] = [
+  { value: "catch_up", label: "Catch Me Up", subtitle: "See what changed", icon: "clock", question: "Where did we leave off, and what should I know to pick things back up?" },
+  { value: "next_action", label: "What's Next?", subtitle: "Find your next move", icon: "target", question: "What is the most useful next action I can take?" },
+  { value: "meeting_prep", label: "Meeting Prep", subtitle: "Walk in prepared", icon: "calendar-check", question: "What should I know and prepare for my next meeting?" },
 ];
 
 type SyncSourceResult = {
@@ -828,7 +831,7 @@ export default function ContinuumDashboard() {
                   <strong>{result.source}</strong>{result.ok ? ` · ${result.fetched} checked, ${result.created} new · Last synced ${result.syncedAt ? new Date(result.syncedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "just now"}` : ` · Sync failed; check server configuration${result.lastSyncedAt ? ` · Last success ${new Date(result.lastSyncedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}`}
                 </span>)}</div>
               </div>}
-              <div aria-label="Briefing mode" className="ask-modes" role="group">
+              <div aria-label="Choose a briefing" className="ask-modes" role="group">
                 {AI_MODES.map((mode) => <button
                   aria-pressed={aiMode === mode.value}
                   className={`ask-mode${aiMode === mode.value ? " ask-mode-active" : ""}`}
@@ -842,11 +845,17 @@ export default function ContinuumDashboard() {
                     setAiError("");
                   }}
                   type="button"
-                >{mode.label}</button>)}
+                >
+                  <span className="ask-mode-icon"><Icon name={mode.icon} size={25} /></span>
+                  <span className="ask-mode-copy"><span className="ask-mode-title">{mode.label}</span><span className="ask-mode-subtitle">{mode.subtitle}</span></span>
+                </button>)}
               </div>
               <form className="ask-form" onSubmit={(event) => { event.preventDefault(); void askContinuum(); }}>
-                <input aria-label="Ask Continuum a question" className="ask-input" onChange={(event) => setAiQuestion(event.target.value)} placeholder="Edit the briefing question…" value={aiQuestion} />
-                <button className="primary-button ask-button" disabled={aiLoading || syncLoading || !selectedProjectId} type="submit">{syncLoading ? "Syncing…" : aiLoading ? "Thinking…" : "Get briefing"}</button>
+                <details className="ask-custom-question">
+                  <summary>Customize question <span>(optional)</span></summary>
+                  <input aria-label="Optional custom briefing question" className="ask-input" onChange={(event) => setAiQuestion(event.target.value)} placeholder="Ask about a specific part of your work" value={aiQuestion} />
+                </details>
+                <button className="primary-button ask-button" disabled={aiLoading || syncLoading || !selectedProjectId} type="submit">{syncLoading ? "Syncing…" : aiLoading ? "Thinking…" : "Get My Briefing"}</button>
               </form>
               {aiError && (
                 <div className="ask-notice" role="alert">
@@ -856,9 +865,9 @@ export default function ContinuumDashboard() {
               )}
               {aiAnswer && (
                 <article className="ask-answer">
-                  <div className="ask-answer-heading"><span className="eyebrow">CONTINUUM SAYS</span><span className="confidence-pill">{aiAnswer.confidence} confidence</span></div>
+                  <div className="ask-answer-heading"><span className="ask-briefing-label">Briefing</span><span className="confidence-pill">{aiAnswer.confidence}</span></div>
                   <p className="ask-answer-text">{aiAnswer.answer}</p>
-                  {aiResultSections?.primaryAction && <div className="ask-primary-action"><p className="ask-label">Your next action</p><p>{aiResultSections.primaryAction}</p></div>}
+                  {aiResultSections?.primaryAction && <div className="ask-primary-action"><p className="ask-label"><Icon name="target" size={14} /> Your next action</p><p>{aiResultSections.primaryAction}</p></div>}
                   <div className="ask-answer-grid">
                     {aiResultSections?.whereWeLeftOff && <div><p className="ask-label">Where you left off</p><p className="ask-value">{aiResultSections.whereWeLeftOff}</p></div>}
                     {aiResultSections && aiResultSections.otherNextSteps.length > 0 && <div><p className="ask-label">Other next steps</p><ul>{aiResultSections.otherNextSteps.map((step) => <li key={step}>{step}</li>)}</ul></div>}
