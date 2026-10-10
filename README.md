@@ -2,7 +2,7 @@
 
 Continuum is a customizable productivity dashboard for tracking work, bringing activity from external services together, and recovering context about what you were working on.
 
-The current repository is the project foundation. The dashboard, authentication, integrations, and AI features are planned but not implemented yet.
+The backend API for projects, activity events, and the "Resume My Work" context summary is implemented. The dashboard UI, integrations, authentication, and AI features are planned but not implemented yet. The agreed API shapes are in [`CONTINUUM_API_CONTRACTS.md`](CONTINUUM_API_CONTRACTS.md).
 
 ## Technology stack
 
@@ -69,6 +69,12 @@ docker compose up -d
 docker compose up -d
 ```
 
+This also starts a short-lived `migrate` container. It waits for PostgreSQL to be healthy, applies every migration in `prisma/migrations`, and exits, so the tables are ready without any extra command. The first run takes a little longer while it installs Prisma inside the container. Check that it succeeded with:
+
+```bash
+docker compose logs migrate
+```
+
 PostgreSQL is available at `localhost:5432` by default. Set `POSTGRES_PORT` in `.env` if that port is already in use. The database data is stored in the named `continuum-postgres-data` Docker volume.
 
 ## Set up Prisma
@@ -83,17 +89,27 @@ npm run db:generate
 npm run db:generate
 ```
 
-There are no application models yet. The Prisma schema contains only the PostgreSQL datasource and client generator so the team can add the product schema later. Once models exist, create a development migration with:
+The schema defines three models:
+
+- `Workspace`: the single demo workspace, created automatically on first use
+- `Project`: belongs to a workspace
+- `WorkEvent`: one normalized activity event (commit, PR, issue, task, or note). It is unique on `(projectId, source, externalId)` so the same source event is never stored twice, and indexed on `(projectId, timestamp)` for the timeline.
+
+Only the backend owner changes `prisma/schema.prisma` or migrations. Migration files in `prisma/migrations` are committed so everyone gets the same tables. `docker compose up -d` applies them automatically.
+
+After pulling new migrations, run `docker compose up -d` again (or `docker compose run --rm migrate`) to apply them.
+
+When the backend owner changes the schema, they create a new migration and commit the generated folder:
 
 ```powershell
-npm run db:migrate -- --name init
+npm run db:migrate -- --name describe-the-change
 ```
 
 ```bash
-npm run db:migrate -- --name init
+npm run db:migrate -- --name describe-the-change
 ```
 
-Open Prisma Studio with `npm run db:studio` when you have models to inspect.
+Open Prisma Studio with `npm run db:studio` to inspect the data.
 
 ## Run the application
 
@@ -108,6 +124,49 @@ npm run dev
 ```
 
 Open <http://localhost:3000>. The health endpoint is available at <http://localhost:3000/api/health>.
+
+## API
+
+All endpoints return JSON in camelCase with UTC ISO 8601 timestamps. Errors always use the shape `{ "error": { "code": "...", "message": "..." } }`. Full request and response examples are in [`CONTINUUM_API_CONTRACTS.md`](CONTINUUM_API_CONTRACTS.md).
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/health` | Service health check, no database needed |
+| `GET` | `/api/projects` | List projects, most recently active first |
+| `POST` | `/api/projects` | Create a project (`name` required, `description` optional) |
+| `GET` | `/api/events?projectId=&limit=&cursor=` | Project activity, newest first, paginated with `nextCursor` |
+| `POST` | `/api/events` | Ingest one event. Returns `201` when created, or `200` with `created: false` for a duplicate `externalId` |
+| `GET` | `/api/context?projectId=` | "Resume My Work" summary: completed, in progress, blockers, next steps |
+
+The context summary is rule-based and needs no AI keys. Every item cites the IDs of the events it is based on. Only merged, closed, or done events count as completed, never commits. Blockers come only from events that say so: a `blocked` label or status, or a note such as "waiting for…".
+
+Shared TypeScript types live in `src/types/contracts.ts`. Import them instead of redefining response shapes.
+
+Integrations should call the shared services directly instead of making HTTP requests to the API:
+
+- `ingestEvent()` in `src/lib/db/events.ts` stores an event with deduplication.
+- `getProjectContext()` in `src/lib/db/context.ts` builds the context summary.
+
+Include `repository`, `prNumber` or `issueNumber`, `title`, and `branch` in event `metadata` when available, so related events are grouped correctly.
+
+### Smoke test
+
+With PostgreSQL running and the migration applied, replace `PROJECT_ID` with the ID returned by the first request:
+
+```bash
+curl -X POST http://localhost:3000/api/projects \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Payment Migration","description":"Hackathon demo"}'
+
+curl -X POST http://localhost:3000/api/events \
+  -H "Content-Type: application/json" \
+  -d '{"projectId":"PROJECT_ID","source":"manual","timestamp":"2026-10-10T05:20:00.000Z","actor":"demo-user","action":"note_added","summary":"Waiting for integration tests"}'
+
+curl "http://localhost:3000/api/events?projectId=PROJECT_ID"
+curl "http://localhost:3000/api/context?projectId=PROJECT_ID"
+```
+
+PowerShell users can use `curl.exe` with the same arguments, or `Invoke-RestMethod`.
 
 Run the checks locally:
 
@@ -140,14 +199,30 @@ This stops the container and keeps the named volume. To remove the local databas
 ```text
 src/
 ├── app/
-│   ├── api/health/route.ts
+│   ├── api/
+│   │   ├── context/route.ts    # GET /api/context
+│   │   ├── events/route.ts     # GET, POST /api/events
+│   │   ├── health/route.ts     # GET /api/health
+│   │   └── projects/route.ts   # GET, POST /api/projects
 │   ├── globals.css
 │   ├── layout.tsx
 │   └── page.tsx
-├── generated/             # Generated Prisma client, ignored by Git
-└── lib/db/prisma.ts       # Reusable Prisma client singleton
+├── generated/                  # Generated Prisma client, ignored by Git
+├── lib/
+│   ├── api/
+│   │   ├── http.ts             # Error responses and handler wrapper
+│   │   └── validation.ts       # Request validation
+│   ├── context/rules.ts        # Rule-based "Resume My Work" engine
+│   └── db/
+│       ├── context.ts          # getProjectContext()
+│       ├── events.ts           # ingestEvent(), listEvents()
+│       ├── mappers.ts          # Database rows → API types
+│       ├── prisma.ts           # Reusable Prisma client singleton
+│       └── projects.ts         # Projects and the demo workspace
+└── types/contracts.ts          # Shared API types
 prisma/
 └── schema.prisma
+CONTINUUM_API_CONTRACTS.md      # Agreed API contracts for the team
 docker-compose.yml
 prisma.config.ts
 ```
@@ -166,12 +241,11 @@ Keep changes focused, run type checking, linting, and the production build befor
 
 ## Planned features
 
-These are future plans and are not implemented in this foundation:
+These are not implemented yet:
 
 - Customizable productivity dashboard and widgets
-- Authentication and user workspaces
-- GitHub, Jira, Microsoft Teams, and Telegram integrations
-- Consolidated activity and context recovery
-- Optional OpenAI or Anthropic assistance
-- Product-specific PostgreSQL models
+- GitHub sync and Telegram bot (`/status`, `/resume`)
+- Jira and Microsoft Teams integrations
+- Authentication and user workspaces. The API currently has no authentication, so do not deploy it publicly.
+- Optional OpenAI or Anthropic assistance for the context summary
 

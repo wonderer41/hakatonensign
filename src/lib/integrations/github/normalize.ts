@@ -43,7 +43,12 @@ function pullRequestEvents(projectId: string, owner: string, repo: string, pr: G
     actor: actor(pr.user) || "github-user",
     summary: `Opened PR #${pr.number}: ${pr.title}`,
     sourceUrl: pr.html_url,
-    metadata: { repository, prNumber: pr.number },
+    metadata: {
+      repository,
+      prNumber: pr.number,
+      title: pr.title,
+      ...(pr.head?.ref ? { branch: pr.head.ref } : {}),
+    },
   };
   const events: ValidatedEventInput[] = [{
     ...base,
@@ -73,7 +78,7 @@ function issueEvents(projectId: string, owner: string, repo: string, issue: GitH
     source: "github" as const,
     actor: actor(issue.user) || "github-user",
     sourceUrl: issue.html_url,
-    metadata: { repository, issueNumber: issue.number },
+    metadata: { repository, issueNumber: issue.number, title: issue.title },
   };
   const events: ValidatedEventInput[] = [{
     ...base,
