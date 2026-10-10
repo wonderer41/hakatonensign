@@ -189,11 +189,22 @@ button { color: inherit; }
 .context-card-heading p { margin: 3px 0 0; color: #6f7e92; font-size: 9px; }
 .context-count { display: grid; min-width: 23px; height: 23px; margin-left: auto; padding: 0 6px; place-items: center; border: 1px solid rgba(148, 163, 184, .12); border-radius: 7px; background: rgba(255, 255, 255, .025); color: #9aa9ba; font-size: 10px; }
 .context-skeleton { display: grid; gap: 10px; padding: 4px 0; }
+.evidence-link { display: inline-flex; align-items: center; gap: 3px; color: #7893a8; text-decoration: none; }
+.evidence-link:hover { color: #a7d6df; }
 .context-skeleton i, .line-skeleton, .activity-loading i { display: block; height: 10px; border-radius: 5px; background: linear-gradient(90deg, rgba(148, 163, 184, .05), rgba(148, 163, 184, .1), rgba(148, 163, 184, .05)); background-size: 200% 100%; animation: shimmer 1.6s ease infinite; }
 .context-skeleton i:first-child { width: 86%; }.context-skeleton i:nth-child(2) { width: 61%; }
 .line-skeleton { width: 85%; height: 17px; }
 
 .activity-section { margin-top: 36px; }
+.calendar-section { margin-top: 28px; }
+.calendar-heading-row { margin-bottom: 13px; }
+.calendar-card { overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: rgba(14, 22, 35, .85); }
+.calendar-list { padding: 0 17px; }
+.calendar-row { display: flex; align-items: center; gap: 12px; min-height: 66px; border-bottom: 1px solid rgba(148, 163, 184, .08); }
+.calendar-row:last-child { border-bottom: 0; }
+.calendar-empty { display: flex; min-height: 142px; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
+.calendar-loading { display: grid; gap: 20px; padding: 23px 20px; }
+.calendar-loading i { display: block; height: 30px; border-radius: 5px; background: linear-gradient(90deg, rgba(148, 163, 184, .05), rgba(148, 163, 184, .1), rgba(148, 163, 184, .05)); background-size: 200% 100%; animation: shimmer 1.6s ease infinite; }
 .activity-heading-row { margin-bottom: 13px; }
 .filter-select-wrap { position: relative; display: inline-flex; align-items: center; min-width: 112px; height: 32px; padding: 0 9px; border: 1px solid rgba(148, 163, 184, .14); border-radius: 8px; background: rgba(17, 26, 40, .75); color: #8e9caf; }
 .filter-select { width: 100%; appearance: none; padding-right: 15px; border: 0; outline: none; background: transparent; color: #aab7c7; font-size: 10px; cursor: pointer; }
@@ -206,6 +217,7 @@ button { color: inherit; }
 .source-github { border-color: rgba(164, 177, 199, .14); background: rgba(164, 177, 199, .06); color: #bdc8d5; }
 .source-jira { border-color: rgba(97, 139, 237, .18); background: rgba(97, 139, 237, .09); color: #91b2ff; }
 .source-manual { border-color: rgba(191, 148, 230, .17); background: rgba(191, 148, 230, .08); color: #c6a0e4; }
+.source-google_calendar { border-color: rgba(112, 190, 174, .2); background: rgba(112, 190, 174, .09); color: #83d4c0; }
 .activity-action { padding: 3px 6px; border: 1px solid rgba(148, 163, 184, .1); border-radius: 5px; color: #77869a; font-size: 9px; }
 .activity-empty { display: flex; min-height: 172px; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
 .activity-empty-icon { display: grid; width: 37px; height: 37px; margin-bottom: 12px; place-items: center; border: 1px solid rgba(148, 163, 184, .13); border-radius: 12px; background: rgba(255, 255, 255, .025); color: #8292a6; }
@@ -280,14 +292,14 @@ button { color: inherit; }
   .metrics-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 9px; }
   .metric-card { min-height: 100px; padding: 12px; }
   .metric-card p.text-3xl { margin-top: 8px; font-size: 26px; }
-  .resume-section, .activity-section { margin-top: 28px; }
+  .resume-section, .activity-section, .calendar-section { margin-top: 28px; }
   .section-heading-row h2 { font-size: 18px; }
   .resume-grid { grid-template-columns: minmax(0, 1fr); gap: 9px; }
   .context-card-wide { grid-column: auto; }
   .next-step-card { min-height: 184px; }.context-card { min-height: 0; }
   .context-card-wide { min-height: 0; }
   .context-card-heading { margin-bottom: 12px; }
-  .activity-list { padding: 0 11px; }
+  .activity-list, .calendar-list { padding: 0 11px; }
   .activity-row { gap: 9px; min-height: 69px; }
   .activity-row .text-sm { font-size: 11px; }
   .activity-action { font-size: 8px; }

@@ -120,14 +120,15 @@ function formatRelativeTime(value: string): string {
 }
 
 function sourceLabel(source: EventSource): string {
-  return source === "github" ? "GitHub" : source === "jira" ? "Jira" : "Manual";
+  return source === "github" ? "GitHub" : source === "jira" ? "Jira" : source === "google_calendar" ? "Google Calendar" : "Manual";
 }
 
 function sourceIcon(source: EventSource): IconName {
-  return source === "github" ? "github" : source === "jira" ? "jira" : "manual";
+  return source === "github" ? "github" : source === "jira" ? "jira" : source === "google_calendar" ? "clock" : "manual";
 }
 
 function eventActionLabel(event: WorkEvent): string {
+  if (event.source === "google_calendar") return "Calendar event";
   const labels: Record<WorkEvent["action"], string> = {
     commit_pushed: "Commit pushed",
     pr_opened: "Pull request opened",
@@ -142,14 +143,82 @@ function eventActionLabel(event: WorkEvent): string {
   return labels[event.action];
 }
 
+function calendarText(event: WorkEvent, field: string): string | null {
+  const value = event.metadata[field];
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function formatCalendarDate(event: WorkEvent): string {
+  const startDate = calendarText(event, "startDate");
+  const endDate = calendarText(event, "endDate");
+  if (startDate) {
+    const start = new Date(`${startDate}T00:00:00`);
+    const end = endDate ? new Date(`${endDate}T00:00:00`) : null;
+    const startLabel = start.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    if (end && endDate !== startDate) {
+      const endLabel = new Date(end.getTime() - 86_400_000).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      return `${startLabel} – ${endLabel} · All day`;
+    }
+    return `${startLabel} · All day`;
+  }
+
+  const start = new Date(calendarText(event, "start") ?? event.timestamp);
+  const end = new Date(calendarText(event, "end") ?? event.timestamp);
+  const dateLabel = start.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  const timeLabel = `${start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} – ${end.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
+  const timeZone = calendarText(event, "timeZone");
+  return `${dateLabel} · ${timeLabel}${timeZone ? ` · ${timeZone}` : ""}`;
+}
+
+function UpcomingMeetings({ events, loading }: { events: WorkEvent[]; loading: boolean }) {
+  return (
+    <section aria-labelledby="upcoming-meetings-title" className="calendar-section">
+      <div className="section-heading-row calendar-heading-row">
+        <div><p className="eyebrow">SCHEDULED CONTEXT</p><h2 id="upcoming-meetings-title">Upcoming meetings</h2></div>
+        <span className="summary-mode"><span />Google Calendar</span>
+      </div>
+      <div className="calendar-card">
+        {loading ? (
+          <div className="calendar-loading"><i /><i /><i /></div>
+        ) : events.length === 0 ? (
+          <div className="calendar-empty">
+            <span className="activity-empty-icon"><Icon name="clock" size={19} /></span>
+            <p className="text-sm font-medium text-slate-300">No upcoming meetings.</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">Events from the configured calendar will appear here.</p>
+          </div>
+        ) : (
+          <div className="calendar-list">
+            {events.map((event) => (
+              <article className="calendar-row" key={event.id}>
+                <span className="source-mark source-google_calendar"><Icon name="clock" size={16} /></span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-slate-100">{calendarText(event, "title") ?? event.summary}</p>
+                  <p className="mt-1.5 text-xs text-slate-500">{formatCalendarDate(event)}</p>
+                </div>
+                {event.sourceUrl && (
+                  <a aria-label={`Open calendar event ${calendarText(event, "title") ?? event.summary}`} className="icon-button ml-2 shrink-0" href={event.sourceUrl} rel="noreferrer" target="_blank">
+                    <Icon name="external" size={16} />
+                  </a>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function ContextList({
   items,
   empty,
   tone = "neutral",
+  events = [],
 }: {
   items: ContextItem[];
   empty: string;
   tone?: "neutral" | "green" | "amber" | "blue";
+  events?: WorkEvent[];
 }) {
   const bulletTone = {
     neutral: "bg-slate-500",
@@ -170,9 +239,17 @@ function ContextList({
           <div className="min-w-0">
             <p className="text-sm leading-6 text-slate-200">{item.text}</p>
             {item.evidenceEventIds.length > 0 && (
-              <p className="mt-1 text-[11px] font-medium tracking-wide text-slate-500">
-                {item.evidenceEventIds.length} {item.evidenceEventIds.length === 1 ? "source" : "sources"}
-              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-medium tracking-wide text-slate-500">
+                <span>{item.evidenceEventIds.length} {item.evidenceEventIds.length === 1 ? "source" : "sources"}</span>
+                {item.evidenceEventIds.map((evidenceId) => {
+                  const evidence = events.find((event) => event.id === evidenceId);
+                  return evidence?.sourceUrl ? (
+                    <a className="evidence-link" href={evidence.sourceUrl} key={evidence.id} rel="noreferrer" target="_blank">
+                      <span>{sourceLabel(evidence.source)}</span><Icon name="external" size={11} />
+                    </a>
+                  ) : null;
+                })}
+              </div>
             )}
           </div>
         </li>
@@ -275,9 +352,18 @@ export default function ContinuumDashboard() {
 
   const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? null;
   const isDetailsLoading = detailsLoading || (Boolean(selectedProjectId) && !summary && !detailsError);
+  const currentTime = summary ? new Date(summary.generatedAt).getTime() : 0;
   const filteredEvents = useMemo(
     () => eventPage.data.filter((event) => sourceFilter === "all" || event.source === sourceFilter),
     [eventPage.data, sourceFilter],
+  );
+  const upcomingMeetings = useMemo(
+    () => eventPage.data
+      .filter((event) => event.source === "google_calendar")
+      .filter((event) => currentTime === 0 || new Date(calendarText(event, "start") ?? event.timestamp).getTime() >= currentTime)
+      .sort((a, b) => new Date(calendarText(a, "start") ?? a.timestamp).getTime() - new Date(calendarText(b, "start") ?? b.timestamp).getTime())
+      .slice(0, 5),
+    [currentTime, eventPage.data],
   );
 
   useEffect(() => {
@@ -311,7 +397,7 @@ export default function ContinuumDashboard() {
       requestJson<{ data: ContextSummary }>(`/api/context?projectId=${encodeURIComponent(selectedProjectId)}`, {
         signal: controller.signal,
       }),
-      requestJson<PaginatedEvents>(`/api/events?projectId=${encodeURIComponent(selectedProjectId)}&limit=20`, {
+      requestJson<PaginatedEvents>(`/api/events?projectId=${encodeURIComponent(selectedProjectId)}&limit=100`, {
         signal: controller.signal,
       }),
     ])
@@ -660,6 +746,8 @@ export default function ContinuumDashboard() {
                   <MetricCard label="Completed" value={summary?.completed.length ?? 0} caption="confirmed outcomes" icon="check" tone="green" />
                 </section>
 
+                <UpcomingMeetings events={upcomingMeetings} loading={isDetailsLoading} />
+
                 <section className="resume-section" id="resume">
                   <div className="section-heading-row">
                     <div>
@@ -685,17 +773,17 @@ export default function ContinuumDashboard() {
 
                     <article className="context-card context-card-wide">
                       <div className="context-card-heading"><span className="context-heading-icon icon-cyan"><Icon name="target" size={16} /></span><div><h3>In progress</h3><p>Work that’s still moving</p></div><span className="context-count">{summary?.inProgress.length ?? 0}</span></div>
-                      {isDetailsLoading ? <div className="context-skeleton"><i /><i /></div> : <ContextList items={summary?.inProgress ?? []} empty="Nothing active yet. New work will show up here." tone="blue" />}
+                      {isDetailsLoading ? <div className="context-skeleton"><i /><i /></div> : <ContextList events={eventPage.data} items={summary?.inProgress ?? []} empty="Nothing active yet. New work will show up here." tone="blue" />}
                     </article>
 
                     <article className="context-card">
                       <div className="context-card-heading"><span className="context-heading-icon icon-amber"><Icon name="alert" size={16} /></span><div><h3>Blocked</h3><p>Explicitly called out</p></div><span className="context-count">{summary?.blockers.length ?? 0}</span></div>
-                      {isDetailsLoading ? <div className="context-skeleton"><i /></div> : <ContextList items={summary?.blockers ?? []} empty="No blockers reported in recent activity." tone="amber" />}
+                      {isDetailsLoading ? <div className="context-skeleton"><i /></div> : <ContextList events={eventPage.data} items={summary?.blockers ?? []} empty="No blockers reported in recent activity." tone="amber" />}
                     </article>
 
                     <article className="context-card">
                       <div className="context-card-heading"><span className="context-heading-icon icon-green"><Icon name="check" size={16} /></span><div><h3>Completed</h3><p>Confirmed in the activity</p></div><span className="context-count">{summary?.completed.length ?? 0}</span></div>
-                      {isDetailsLoading ? <div className="context-skeleton"><i /></div> : <ContextList items={summary?.completed ?? []} empty="Completed work will appear as it’s recorded." tone="green" />}
+                      {isDetailsLoading ? <div className="context-skeleton"><i /></div> : <ContextList events={eventPage.data} items={summary?.completed ?? []} empty="Completed work will appear as it’s recorded." tone="green" />}
                     </article>
                   </div>
                 </section>
@@ -705,7 +793,7 @@ export default function ContinuumDashboard() {
                     <div><p className="eyebrow">THE LATEST FROM YOUR TOOLS</p><h2>Recent activity</h2></div>
                     <label className="filter-select-wrap"><span className="sr-only">Filter activity by source</span>
                       <select className="filter-select" onChange={(event) => setSourceFilter(event.target.value as "all" | EventSource)} value={sourceFilter}>
-                        <option value="all">All sources</option><option value="github">GitHub</option><option value="jira">Jira</option><option value="manual">Manual</option>
+                        <option value="all">All sources</option><option value="github">GitHub</option><option value="jira">Jira</option><option value="google_calendar">Google Calendar</option><option value="manual">Manual</option>
                       </select><Icon name="chevron" size={14} />
                     </label>
                   </div>
