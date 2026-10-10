@@ -8,6 +8,10 @@ const STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   RATE_LIMITED: 429,
   INTERNAL_ERROR: 500,
   UPSTREAM_ERROR: 502,
+  AI_NOT_CONFIGURED: 503,
+  AI_PROVIDER_ERROR: 502,
+  AI_INVALID_RESPONSE: 502,
+  AI_CONTEXT_EMPTY: 422,
 };
 
 // Throw from services or route handlers; withErrorHandling turns it into an

@@ -60,6 +60,16 @@ export interface ApiError {
   };
 }
 
+export interface AiContextResponse {
+  answer: string;
+  whereWeLeftOff: string;
+  nextSteps: string[];
+  blockers: string[];
+  upcomingMeetings: string[];
+  evidenceEventIds: string[];
+  confidence: "high" | "medium" | "low";
+}
+
 export interface PaginatedEvents {
   data: WorkEvent[];
   nextCursor: string | null;
@@ -128,4 +138,8 @@ export type ApiErrorCode =
   | "CONFLICT"
   | "RATE_LIMITED"
   | "INTERNAL_ERROR"
-  | "UPSTREAM_ERROR";
+  | "UPSTREAM_ERROR"
+  | "AI_NOT_CONFIGURED"
+  | "AI_PROVIDER_ERROR"
+  | "AI_INVALID_RESPONSE"
+  | "AI_CONTEXT_EMPTY";
