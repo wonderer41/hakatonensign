@@ -17,3 +17,6 @@ src/generated/
 *.tsbuildinfo
 .DS_Store
 Thumbs.db
+
+# graphify knowledge graph (generated)
+graphify-out/

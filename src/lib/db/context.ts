@@ -7,7 +7,7 @@ import { prisma } from "./prisma";
 // How many recent events the summary looks at.
 const CONTEXT_WINDOW = 200;
 
-// Shared by GET /api/context and the Telegram /resume command.
+// Used by GET /api/context.
 export async function getProjectContext(projectId: string): Promise<ContextSummary> {
   await assertProjectExists(projectId);
   const [events, activityCount] = await Promise.all([
