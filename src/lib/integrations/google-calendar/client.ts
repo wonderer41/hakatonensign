@@ -4,27 +4,10 @@ import type { GoogleCalendarConfig } from "./config";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_CALENDAR_API = "https://www.googleapis.com/calendar/v3";
 const PAGE_SIZE = 250;
-const MAX_EVENTS = 1_000;
 
 interface CalendarListResponse {
   items?: unknown;
   nextPageToken?: unknown;
-}
-
-export interface GoogleCalendarApiEvent {
-  id: string;
-  status: string | null;
-  summary: string | null;
-  description: string | null;
-  htmlLink: string | null;
-  start: { date?: string; dateTime?: string; timeZone?: string };
-  end: { date?: string; dateTime?: string; timeZone?: string };
-  created: string | null;
-  updated: string | null;
-  organizer: { displayName?: string; email?: string } | null;
-  creator: { displayName?: string; email?: string } | null;
-  recurrence: string[] | null;
-  recurringEventId: string | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -75,41 +58,6 @@ async function accessToken(config: GoogleCalendarConfig): Promise<string> {
   return payload.access_token;
 }
 
-function parseEvent(value: unknown): GoogleCalendarApiEvent {
-  if (!isRecord(value) || typeof value.id !== "string" || !isRecord(value.start) || !isRecord(value.end)) {
-    throw new HttpError("UPSTREAM_ERROR", "Google Calendar returned a malformed event");
-  }
-  const organizer = isRecord(value.organizer)
-    ? { displayName: stringOrNull(value.organizer.displayName) ?? undefined, email: stringOrNull(value.organizer.email) ?? undefined }
-    : null;
-  const creator = isRecord(value.creator)
-    ? { displayName: stringOrNull(value.creator.displayName) ?? undefined, email: stringOrNull(value.creator.email) ?? undefined }
-    : null;
-  return {
-    id: value.id,
-    status: stringOrNull(value.status),
-    summary: stringOrNull(value.summary),
-    description: stringOrNull(value.description),
-    htmlLink: stringOrNull(value.htmlLink),
-    start: {
-      date: stringOrNull(value.start.date) ?? undefined,
-      dateTime: stringOrNull(value.start.dateTime) ?? undefined,
-      timeZone: stringOrNull(value.start.timeZone) ?? undefined,
-    },
-    end: {
-      date: stringOrNull(value.end.date) ?? undefined,
-      dateTime: stringOrNull(value.end.dateTime) ?? undefined,
-      timeZone: stringOrNull(value.end.timeZone) ?? undefined,
-    },
-    created: stringOrNull(value.created),
-    updated: stringOrNull(value.updated),
-    organizer,
-    creator,
-    recurrence: Array.isArray(value.recurrence) ? value.recurrence.filter((item): item is string => typeof item === "string") : null,
-    recurringEventId: stringOrNull(value.recurringEventId),
-  };
-}
-
 async function fetchPage(
   config: GoogleCalendarConfig,
   token: string,
@@ -123,7 +71,8 @@ async function fetchPage(
     timeMax,
     singleEvents: "true",
     orderBy: "startTime",
-    showDeleted: "false",
+    // Cancelled events must come back so the cache can mark them cancelled.
+    showDeleted: "true",
     maxResults: String(PAGE_SIZE),
   });
   if (pageToken) params.set("pageToken", pageToken);
@@ -149,23 +98,86 @@ async function fetchPage(
   return payload as CalendarListResponse;
 }
 
-export async function fetchGoogleCalendarEvents(config: GoogleCalendarConfig, now = new Date()): Promise<GoogleCalendarApiEvent[]> {
-  const timeMin = new Date(now.getTime() - config.pastDays * 86_400_000).toISOString();
-  const timeMax = new Date(now.getTime() + config.futureDays * 86_400_000).toISOString();
-  const token = await accessToken(config);
-  const events: GoogleCalendarApiEvent[] = [];
-  let pageToken: string | undefined;
+// ---------- Timeline window (CalendarEvent cache) ----------
 
-  while (events.length < MAX_EVENTS) {
-    const page = await fetchPage(config, token, timeMin, timeMax, pageToken);
-    if (!Array.isArray(page.items)) throw new HttpError("UPSTREAM_ERROR", "Google Calendar returned an invalid event list");
-    events.push(...page.items.map(parseEvent));
-    if (typeof page.nextPageToken !== "string" || page.items.length === 0) break;
-    pageToken = page.nextPageToken;
-  }
-  return events.slice(0, MAX_EVENTS).filter((event) => event.status !== "cancelled");
+const MAX_WINDOW_PAGES = 20;
+
+export type GoogleEventStatus = "confirmed" | "tentative" | "cancelled";
+
+export interface GoogleCalendarWindowEvent {
+  id: string;
+  status: GoogleEventStatus;
+  summary: string | null;
+  description: string | null;
+  htmlLink: string | null;
+  etag: string | null;
+  /** Null only for cancelled stubs, which Google may send without times. */
+  start: { date?: string; dateTime?: string } | null;
+  end: { date?: string; dateTime?: string } | null;
+  /** extendedProperties.private, where Hermes stores homelabDailyItemId. */
+  privateProperties: Record<string, string>;
 }
 
-export async function verifyGoogleCalendarConnection(config: GoogleCalendarConfig): Promise<void> {
-  await fetchGoogleCalendarEvents(config, new Date());
+export interface GoogleCalendarWindow {
+  events: GoogleCalendarWindowEvent[];
+  /** False when the page cap was hit; callers must not treat missing events as deleted. */
+  complete: boolean;
+}
+
+function parseWhen(value: unknown): { date?: string; dateTime?: string } | null {
+  if (!isRecord(value)) return null;
+  const date = stringOrNull(value.date) ?? undefined;
+  const dateTime = stringOrNull(value.dateTime) ?? undefined;
+  return date || dateTime ? { date, dateTime } : null;
+}
+
+function parseWindowEvent(value: unknown): GoogleCalendarWindowEvent {
+  if (!isRecord(value) || typeof value.id !== "string" || !value.id) {
+    throw new HttpError("UPSTREAM_ERROR", "Google Calendar returned a malformed event");
+  }
+  const status: GoogleEventStatus =
+    value.status === "cancelled" ? "cancelled" : value.status === "tentative" ? "tentative" : "confirmed";
+  const start = parseWhen(value.start);
+  const end = parseWhen(value.end);
+  if (status !== "cancelled" && (!start || !end)) {
+    throw new HttpError("UPSTREAM_ERROR", "Google Calendar returned an event without start or end");
+  }
+  const privateProperties: Record<string, string> = {};
+  const extended = isRecord(value.extendedProperties) ? value.extendedProperties : null;
+  if (extended && isRecord(extended.private)) {
+    for (const [key, raw] of Object.entries(extended.private)) {
+      if (typeof raw === "string") privateProperties[key] = raw;
+    }
+  }
+  return {
+    id: value.id,
+    status,
+    summary: stringOrNull(value.summary),
+    description: stringOrNull(value.description),
+    htmlLink: stringOrNull(value.htmlLink),
+    etag: stringOrNull(value.etag),
+    start,
+    end,
+    privateProperties,
+  };
+}
+
+/** Every event overlapping [timeMin, timeMax), including cancelled ones, with recurring events expanded. */
+export async function fetchGoogleCalendarWindow(
+  config: GoogleCalendarConfig,
+  timeMin: Date,
+  timeMax: Date,
+): Promise<GoogleCalendarWindow> {
+  const token = await accessToken(config);
+  const events: GoogleCalendarWindowEvent[] = [];
+  let pageToken: string | undefined;
+
+  for (let page = 0; page < MAX_WINDOW_PAGES; page += 1) {
+    const response = await fetchPage(config, token, timeMin.toISOString(), timeMax.toISOString(), pageToken);
+    if (!Array.isArray(response.items)) throw new HttpError("UPSTREAM_ERROR", "Google Calendar returned an invalid event list");
+    events.push(...response.items.map(parseWindowEvent));
+    if (typeof response.nextPageToken !== "string") return { events, complete: true };
+    pageToken = response.nextPageToken;
+  }
+  return { events, complete: false };
 }

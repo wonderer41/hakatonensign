@@ -1,0 +1,228 @@
+// Homelab Daily — additive models.
+// Append to prisma/schema.prisma (keep the existing Workspace/Project/WorkEvent models),
+// then create a migration with `npx prisma migrate dev --name homelab_daily`.
+// Ask Gerardo before dropping or changing any existing model (see docs/07-OPEN-DECISIONS.md).
+
+enum Actor {
+  user
+  hermes
+  github
+  system
+}
+
+enum SprintStatus {
+  planned
+  active
+  closed
+}
+
+enum CardStatus {
+  active
+  paused
+  done
+  archived
+}
+
+enum CalendarEventKind {
+  calendar   // anything that came from Google Calendar
+  work_block // a block created by Hermes for a checklist item or alert
+}
+
+enum CalendarEventStatus {
+  confirmed
+  tentative
+  cancelled
+}
+
+enum ScheduleStatus {
+  checking  // request sent, waiting for the conflict check / Hermes
+  conflict  // overlaps something; suggestion may be set
+  booked    // calendar event created and cached
+  failed    // Hermes or Google error
+  cancelled // user closed it before it finished
+}
+
+enum BannerKind {
+  gmail
+  orphans
+  scan
+  stocks
+}
+
+enum AlertSeverity {
+  warning
+  critical
+}
+
+/// A time-boxed group of Working-on cards.
+model Sprint {
+  id          String       @id @default(uuid()) @db.Uuid
+  /// Stable key for idempotent upserts by Hermes or GitHub sync, e.g. "github:milestone:wonderer41/study-sessions:3".
+  externalKey String?      @unique @db.VarChar(200)
+  name        String       @db.VarChar(120)
+  goal        String?      @db.VarChar(500)
+  startsOn    DateTime     @db.Date
+  endsOn      DateTime     @db.Date
+  status      SprintStatus @default(planned)
+  createdBy   Actor        @default(user)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  cards       WorkCard[]
+
+  @@index([status, startsOn])
+}
+
+/// One card in the "Working on" column. Fully data-driven: created/updated by the user, GitHub sync or Hermes.
+model WorkCard {
+  id             String          @id @default(uuid()) @db.Uuid
+  externalKey    String?         @unique @db.VarChar(200)
+  title          String          @db.VarChar(160)
+  /// "owner/repo" when the card mirrors a GitHub repository.
+  repoFullName   String?         @db.VarChar(200)
+  milestoneTitle String?         @db.VarChar(160)
+  sprintId       String?         @db.Uuid
+  /// Optional link to the existing Project so WorkEvents can feed the card's meta line.
+  projectId      String?         @db.Uuid
+  status         CardStatus      @default(active)
+  /// Sort order inside the column (gaps allowed; reorder by rewriting positions).
+  position       Int             @default(0)
+  createdBy      Actor           @default(user)
+  /// One-line Hermes prompt on the collapsed card, e.g. "Block 90 min tonight for #12?". Null hides the row.
+  hermesSuggestion String?       @db.VarChar(300)
+  lastActivityAt DateTime?
+  /// Free-form extras (e.g. weekly commit count) shown in the meta line.
+  meta           Json            @default("{}")
+  /// Optimistic concurrency: clients send the version they edited; mismatches return 409.
+  version        Int             @default(1)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  sprint         Sprint?         @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  project        Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  items          ChecklistItem[]
+
+  @@index([status, position])
+  @@index([sprintId])
+}
+
+/// A checklist row inside a card (usually a GitHub issue).
+model ChecklistItem {
+  id              String            @id @default(uuid()) @db.Uuid
+  cardId          String            @db.Uuid
+  externalKey     String?           @unique @db.VarChar(200)
+  title           String            @db.VarChar(200)
+  issueNumber     Int?
+  sourceUrl       String?
+  done            Boolean           @default(false)
+  doneAt          DateTime?
+  /// The "now"/"next" item shown on the collapsed card. At most one per card (enforce in code).
+  isCurrent       Boolean           @default(false)
+  position        Int               @default(0)
+  createdBy       Actor             @default(user)
+  version         Int               @default(1)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  card            WorkCard          @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  calendarEvents  CalendarEvent[]
+  scheduleRequests ScheduleRequest[]
+
+  @@index([cardId, position])
+}
+
+/// Cache of Google Calendar events used to build the daily timeline.
+/// Unlike WorkEvent, rows are updated and cancelled when the calendar changes.
+model CalendarEvent {
+  id              String              @id @default(uuid()) @db.Uuid
+  calendarId      String              @db.VarChar(200)
+  externalId      String              @db.VarChar(1024)
+  title           String              @db.VarChar(300)
+  startsAt        DateTime
+  endsAt          DateTime
+  allDay          Boolean             @default(false)
+  kind            CalendarEventKind   @default(calendar)
+  status          CalendarEventStatus @default(confirmed)
+  checklistItemId String?             @db.Uuid
+  alertId         String?             @db.Uuid
+  etag            String?             @db.VarChar(200)
+  htmlLink        String?
+  syncedAt        DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  checklistItem   ChecklistItem?      @relation(fields: [checklistItemId], references: [id], onDelete: SetNull)
+  alert           Alert?              @relation(fields: [alertId], references: [id], onDelete: SetNull)
+
+  @@unique([calendarId, externalId])
+  @@index([startsAt])
+  @@index([endsAt])
+}
+
+/// Stores the incremental sync token per calendar so syncs only fetch changes.
+model CalendarSyncState {
+  calendarId String   @id @db.VarChar(200)
+  syncToken  String?
+  lastSyncAt DateTime?
+  lastError  String?
+  updatedAt  DateTime @updatedAt
+}
+
+/// One "Schedule with Hermes" conversation for a checklist item or alert.
+model ScheduleRequest {
+  id              String         @id @default(uuid()) @db.Uuid
+  checklistItemId String?        @db.Uuid
+  alertId         String?        @db.Uuid
+  requestedStart  DateTime
+  durationMin     Int
+  status          ScheduleStatus @default(checking)
+  /// Conflicting event when status = conflict.
+  conflictEventId String?        @db.Uuid
+  suggestedStart  DateTime?
+  calendarEventId String?        @db.Uuid
+  hermesRunId     String?        @db.VarChar(200)
+  /// [{ who: "hermes" | "me", text, at }]
+  transcript      Json           @default("[]")
+  error           String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  checklistItem   ChecklistItem? @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
+  alert           Alert?         @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@index([checklistItemId, createdAt])
+}
+
+/// The banner's first slide. One row per local date.
+model DailyMessage {
+  date      DateTime @id @db.Date
+  text      String   @db.VarChar(500)
+  author    Actor    @default(user)
+  updatedAt DateTime @updatedAt
+}
+
+/// Latest data for a banner slide, pushed by Hermes or n8n. History is kept; the page reads the newest per kind.
+model BannerSnapshot {
+  id         String     @id @default(uuid()) @db.Uuid
+  kind       BannerKind
+  /// Shape depends on kind; validated against the schemas in src/types/dashboard-contracts.ts.
+  payload    Json
+  capturedAt DateTime
+  pushedBy   Actor      @default(hermes)
+  createdAt  DateTime   @default(now())
+
+  @@index([kind, capturedAt])
+}
+
+/// Items for the "Broken" panel (daily container scan, backups, etc.).
+model Alert {
+  id               String            @id @default(uuid()) @db.Uuid
+  /// Stable key so repeated pushes update the same alert, e.g. "proxmox:vzdump:vm100".
+  dedupeKey        String            @unique @db.VarChar(200)
+  source           String            @db.VarChar(100)
+  title            String            @db.VarChar(200)
+  detail           String?           @db.VarChar(500)
+  severity         AlertSeverity     @default(warning)
+  openedAt         DateTime          @default(now())
+  resolvedAt       DateTime?
+  meta             Json              @default("{}")
+  updatedAt        DateTime          @updatedAt
+  calendarEvents   CalendarEvent[]
+  scheduleRequests ScheduleRequest[]
+
+  @@index([resolvedAt, openedAt])
+}
