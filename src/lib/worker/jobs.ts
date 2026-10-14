@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
+import { runGithubCardMetaJob } from "@/lib/integrations/github/card-meta";
 import { syncCalendarTimeline } from "@/lib/integrations/google-calendar/timeline-sync";
 import { checkSeerrPending } from "@/lib/integrations/seerr/pending";
 import { syncStockHistory, syncStockQuotes } from "@/lib/integrations/stocks/sync";
@@ -84,5 +85,11 @@ export const workerJobs: WorkerJob[] = [
       const result = await syncStockHistory(now);
       return `updated ${result.updated.length} · skipped ${result.skipped.length}${failedSummary(result.failed)}`;
     },
+  },
+  {
+    // GitHub → the card meta line (D7: read-only). Publishes card.upserted for cards whose data changed.
+    name: "github-sync",
+    trigger: { everyMs: 5 * MINUTE },
+    run: async ({ now }) => runGithubCardMetaJob(now),
   },
 ];

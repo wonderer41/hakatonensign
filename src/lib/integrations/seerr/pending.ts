@@ -11,7 +11,7 @@ const DETAILS_CONCURRENCY = 4;
 
 export interface PendingEntry {
   request: SeerrRequest;
-  /** Null when Seerr couldn't load the title/poster; the request is still listed. */
+  /** Null when Seerr couldn't load the title details; the request is still listed. */
   details: SeerrMediaDetails | null;
 }
 

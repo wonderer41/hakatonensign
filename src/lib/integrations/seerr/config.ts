@@ -27,8 +27,6 @@ export interface SeerrMediaLibraries {
 export interface SeerrLibraryMapping {
   movie: SeerrMediaLibraries;
   tv: SeerrMediaLibraries;
-  /** Sent as is4k on the library update (SEERR_IS_4K, default false). */
-  is4k: boolean;
 }
 
 function configError(message: string): HttpError {
@@ -58,14 +56,6 @@ function integer(env: NodeJS.ProcessEnv, name: string, min: number): number {
     throw configError(`${name} must be an integer ≥ ${min}`);
   }
   return Number(raw);
-}
-
-function flag(env: NodeJS.ProcessEnv, name: string, fallback: boolean): boolean {
-  const raw = env[name]?.trim().toLowerCase() ?? "";
-  if (!raw) return fallback;
-  if (raw === "true" || raw === "1") return true;
-  if (raw === "false" || raw === "0") return false;
-  throw configError(`${name} must be true or false`);
 }
 
 function target(env: NodeJS.ProcessEnv, serverVar: string, rootVar: string, profileVar: string): SeerrLibraryTarget {
@@ -102,6 +92,5 @@ export function loadSeerrLibraryMapping(env: NodeJS.ProcessEnv = process.env): S
       permanent: target(env, "SEERR_TV_SERVER_ID", "SEERR_TV_PERMANENT_ROOT", "SEERR_TV_PERMANENT_PROFILE_ID"),
       anime: target(env, "SEERR_TV_SERVER_ID", "SEERR_ANIME_TV_ROOT", "SEERR_ANIME_TV_PROFILE_ID"),
     },
-    is4k: flag(env, "SEERR_IS_4K", false),
   };
 }

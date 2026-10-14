@@ -236,12 +236,18 @@ export interface SeerrRequestDto {
   mediaType: "movie" | "tv";
   seasons: number[] | null;
   requestedBy: string;
-  posterUrl: string | null;
   createdAt: string;
 }
 
 export interface SeerrDecisionRequest {
   library: "temp" | "permanent";
+}
+
+/** Response of POST /api/seerr/requests/:id/approve. */
+export interface SeerrDecisionResponse {
+  ok: true;
+  /** The library the request actually landed in: anime always reports "anime", whatever the switch said. */
+  library: "temp" | "permanent" | "anime";
 }
 
 export interface WaitingDto {

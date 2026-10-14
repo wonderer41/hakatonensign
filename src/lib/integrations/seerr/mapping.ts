@@ -38,14 +38,12 @@ export function chooseLibrary(
 export function libraryUpdateBody(
   request: Pick<SeerrRequest, "id" | "mediaType" | "seasons">,
   target: SeerrLibraryTarget,
-  is4k: boolean,
 ): SeerrUpdateRequestBody {
   const body: SeerrUpdateRequestBody = {
     mediaType: request.mediaType,
     serverId: target.serverId,
     rootFolder: target.rootFolder,
     profileId: target.profileId,
-    is4k,
   };
   if (request.mediaType === "tv") {
     // Seerr rejects a TV edit without seasons; resend the ones already on the request.

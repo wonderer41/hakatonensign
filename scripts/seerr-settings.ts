@@ -96,11 +96,11 @@ async function main(): Promise<void> {
     checkTarget("show · permanent", "sonarr", mapping.tv.permanent, servers),
     checkTarget("show · anime", "sonarr", mapping.tv.anime, servers),
   ];
-  console.log(`  SEERR_IS_4K       ${mapping.is4k} (Seerr's PUT /request/{id} keeps the is4k the request was created with)`);
+  // Seerr ignores is4k on PUT /request/{id}, so the dashboard doesn't send it; a 4K server in the mapping is still worth a note.
   for (const [kind, serverId] of [["radarr", mapping.movie.temp.serverId], ["sonarr", mapping.tv.temp.serverId]] as const) {
     const found = servers.get(`${kind}:${serverId}`);
-    if (found && found.server.is4k !== mapping.is4k) {
-      console.log(`  note              ${kind} ${serverId} is ${found.server.is4k ? "" : "not "}marked as a 4K server in Seerr`);
+    if (found?.server.is4k) {
+      console.log(`  note              ${kind} ${serverId} is marked as a 4K server in Seerr; requests moved there keep the is4k they were created with`);
     }
   }
   if (results.includes(false)) process.exitCode = 1;

@@ -33,7 +33,7 @@ Auth for these depends on decision D3 (network-only vs login). Every mutating ro
 | `POST /api/schedule/:id/cancel` | → `ScheduleRequestDto` | Bubble closed before finishing. |
 | `PUT /api/daily-message` | `{ date, text }` → `{ date, text, author }` | |
 | `GET /api/seerr/requests` | → `{ data: SeerrRequestDto[] }` | Proxies Seerr `GET /api/v1/request?filter=pending`. |
-| `POST /api/seerr/requests/:id/approve` | `SeerrDecisionRequest` → `{ ok: true }` | Server does `PUT /api/v1/request/:id` (library mapping, D14) then `POST /api/v1/request/:id/approve`. |
+| `POST /api/seerr/requests/:id/approve` | `SeerrDecisionRequest` → `SeerrDecisionResponse` (`{ ok: true, library: "temp" \| "permanent" \| "anime" }`) | Server does `PUT /api/v1/request/:id` (library mapping, D14) then `POST /api/v1/request/:id/approve`. Anime always lands in the anime library whatever the switch says, so `library` reports where the request really went (the row then reads `Approved → Temp library`, `Permanent library` or `Anime library`). |
 | `POST /api/seerr/requests/:id/decline` | → `{ ok: true }` | `POST /api/v1/request/:id/decline`. |
 | `GET /api/stream` | SSE | See section C. |
 
@@ -78,7 +78,7 @@ data: {}
 | Job | Interval | Does |
 |---|---|---|
 | Calendar sync | every 2 min + on `/api/hermes/calendar/changed` | Reuse `src/lib/integrations/google-calendar/client.ts` but fetch a rolling window (`-1 day … +14 days`) with `showDeleted=true`, and also read `extendedProperties.private`. Upsert `CalendarEvent` by `(calendarId, externalId)`, set `status = cancelled` for cancelled or no-longer-returned events in the window, record `lastSyncAt`/`lastError` in `CalendarSyncState`, emit `timeline.changed` for affected dates. (Google's `syncToken` can't be combined with `timeMin/timeMax`, so the window poll is simpler here.) |
-| GitHub sync | every 5 min (reuse `src/lib/integrations/github/polling.ts`) | Update card meta (last commit, weekly count), and items from issues per D7. |
+| GitHub sync | every 5 min (`github-sync`, `src/lib/integrations/github/card-meta.ts`) | Read-only (D7): for each non-archived card with `repoFullName`, writes `lastActivityAt` and `meta.github` (default branch, last commit time, commits in the last 7 days). The page formats it as the card's meta line (`src/lib/dashboard/meta-line.ts`). Matching pushes to checklist items is Hermes's job. `npm run sync:github` runs it once. |
 | Schedule worker | on demand | Runs the Hermes flow for `checking` requests (see `docs/05-HERMES.md`), with a 120s timeout → `failed`. |
 | Seerr poll | every 2 min | Cache the pending count for the Waiting panel; emit `seerr.changed` when it changes. |
 | Retention | daily 03:30 local | Deletes old snapshots, schedule requests, events, resolved alerts. |
@@ -93,11 +93,26 @@ DASHBOARD_TIME_ZONE=America/Denver
 HERMES_DASHBOARD_TOKEN=            # Hermes → dashboard bearer token (long random)
 HERMES_API_URL=                    # Hermes API server base URL, e.g. http://<host>:<port>/v1 (D5)
 HERMES_API_KEY=                    # Hermes API_SERVER_KEY
-SEERR_URL=https://requests.wonderer41.org
+GITHUB_TOKEN=                      # fine-grained, read-only (Contents, Metadata); card meta line (D7)
+SEERR_URL=http://192.168.1.10:5055 # LAN base URL the server calls
+SEERR_PUBLIC_URL=https://requests.example.com   # only for the "Open Seerr" link
 SEERR_API_KEY=
-SEERR_TEMP_MOVIE_ROOT=             # D14
-SEERR_TEMP_TV_ROOT=                # D14
-SEERR_TEMP_PROFILE_ID=             # D14
+# Temp | Permanent | anime library mapping (D14). Server ids count from 0 (Seerr's Radarr/Sonarr servers);
+# `npm run seerr:settings` lists the real values and checks these. Anime always uses the SEERR_ANIME_* pair.
+SEERR_MOVIE_SERVER_ID=0
+SEERR_MOVIE_TEMP_ROOT=/path/to/temp-movies
+SEERR_MOVIE_TEMP_PROFILE_ID=1
+SEERR_MOVIE_PERMANENT_ROOT=/path/to/movies
+SEERR_MOVIE_PERMANENT_PROFILE_ID=1
+SEERR_TV_SERVER_ID=0
+SEERR_TV_TEMP_ROOT=/path/to/temp-tv
+SEERR_TV_TEMP_PROFILE_ID=1
+SEERR_TV_PERMANENT_ROOT=/path/to/tv
+SEERR_TV_PERMANENT_PROFILE_ID=1
+SEERR_ANIME_MOVIE_ROOT=/path/to/anime
+SEERR_ANIME_MOVIE_PROFILE_ID=1
+SEERR_ANIME_TV_ROOT=/path/to/anime
+SEERR_ANIME_TV_PROFILE_ID=1
 SONARR_URL=https://sonarr.example.com   # link only; your NPM domain for Sonarr
 RADARR_URL=https://radarr.example.com   # link only; your NPM domain for Radarr
 GOOGLE_CALENDAR_IDS=primary        # comma-separated; existing GOOGLE_* OAuth vars are reused

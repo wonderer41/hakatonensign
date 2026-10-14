@@ -14,6 +14,7 @@
     "db:studio": "prisma studio",
     "google:auth": "tsx scripts/google-auth.ts",
     "sync:calendar": "tsx scripts/sync-calendar.ts",
+    "sync:github": "tsx scripts/sync-github.ts",
     "sync:stocks": "tsx scripts/sync-stocks.ts",
     "sync:stocks:history": "tsx scripts/sync-stocks-history.ts",
     "stocks:watchlist": "tsx scripts/stocks-watchlist.ts",

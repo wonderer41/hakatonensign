@@ -41,7 +41,7 @@ test("malformed requests are rejected as upstream errors", () => {
   assert.throws(() => parseSeerrRequestPage({ results: "nope" }), isUpstream);
 });
 
-test("movie details → DTO with year and w185 poster", () => {
+test("movie details → DTO with title and year", () => {
   const dto = toSeerrRequestDto(parseSeerrRequest(movieRequest), parseSeerrMediaDetails(movieDetails, "movie", 603));
   assert.deepEqual(dto, {
     id: 42,
@@ -50,7 +50,6 @@ test("movie details → DTO with year and w185 poster", () => {
     mediaType: "movie",
     seasons: null,
     requestedBy: "maria",
-    posterUrl: "https://image.tmdb.org/t/p/w185/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg",
     createdAt: "2026-10-13T02:14:05.000Z",
   });
 });
@@ -65,14 +64,13 @@ test("TV details use name/firstAirDate and keep keyword ids", () => {
   assert.equal(dto.mediaType, "tv");
 });
 
-test("missing details still list the request; odd poster paths and missing keywords are not trusted", () => {
+test("missing details still list the request; a missing release date or keyword list is not guessed", () => {
   const dto = toSeerrRequestDto(parseSeerrRequest(movieRequest), null);
   assert.equal(dto.title, "TMDB #603");
   assert.equal(dto.year, null);
-  assert.equal(dto.posterUrl, null);
+  assert.equal("posterUrl" in dto, false);
 
-  const odd = parseSeerrMediaDetails({ ...movieDetails, posterPath: "//evil.example/x.jpg", releaseDate: "", keywords: undefined }, "movie", 603);
-  assert.equal(odd.posterPath, null);
+  const odd = parseSeerrMediaDetails({ ...movieDetails, releaseDate: "", keywords: undefined }, "movie", 603);
   assert.equal(odd.year, null);
   assert.equal(odd.keywordIds, null);
   assert.throws(() => parseSeerrMediaDetails({ ...movieDetails, title: "", originalTitle: "" }, "movie", 603), isUpstream);

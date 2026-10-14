@@ -14,14 +14,16 @@ import {
 const API_PREFIX = "/api/v1";
 const TIMEOUT_MS = 10_000;
 
-/** Body of PUT /api/v1/request/{id}. Seerr requires seasons for TV and only edits pending requests. */
+/**
+ * Body of PUT /api/v1/request/{id}. Seerr requires seasons for TV and only edits pending requests.
+ * is4k is not sent: Seerr ignores it on this endpoint and keeps the one the request was created with.
+ */
 export interface SeerrUpdateRequestBody {
   mediaType: SeerrMediaType;
   serverId: number;
   rootFolder: string;
   profileId: number;
   seasons?: number[];
-  is4k: boolean;
 }
 
 interface CallOptions {

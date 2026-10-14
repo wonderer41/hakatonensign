@@ -33,25 +33,18 @@ test("anime ignores the switch, for movies and shows", () => {
   }
 });
 
-test("the update body carries seasons only for TV, and is4k from config", () => {
+test("the update body carries seasons only for TV, and never is4k (Seerr ignores it)", () => {
   const target = { serverId: 0, rootFolder: "/media/movies-temp", profileId: 4 };
-  assert.deepEqual(libraryUpdateBody({ id: 1, mediaType: "movie", seasons: [] }, target, false), {
+  assert.deepEqual(libraryUpdateBody({ id: 1, mediaType: "movie", seasons: [] }, target), {
     mediaType: "movie",
     serverId: 0,
     rootFolder: "/media/movies-temp",
     profileId: 4,
-    is4k: false,
   });
-  const tv = libraryUpdateBody({ id: 2, mediaType: "tv", seasons: [1, 3] }, target, true);
+  const tv = libraryUpdateBody({ id: 2, mediaType: "tv", seasons: [1, 3] }, target);
   assert.deepEqual(tv.seasons, [1, 3]);
-  assert.equal(tv.is4k, true);
-  assert.throws(() => libraryUpdateBody({ id: 3, mediaType: "tv", seasons: [] }, target, false), HttpError);
-});
-
-test("config: is4k defaults to false and must be a boolean", () => {
-  assert.equal(mapping.is4k, false);
-  assert.equal(loadSeerrLibraryMapping(testEnv({ SEERR_IS_4K: "true" })).is4k, true);
-  assert.throws(() => loadSeerrLibraryMapping(testEnv({ SEERR_IS_4K: "yes" })), seerrUnavailable(/SEERR_IS_4K/));
+  assert.equal("is4k" in tv, false);
+  assert.throws(() => libraryUpdateBody({ id: 3, mediaType: "tv", seasons: [] }, target), HttpError);
 });
 
 test("config: every mapping value is required and ids must be integers", () => {

@@ -28,7 +28,7 @@ export async function approveSeerrRequest(
   }
 
   const target = chooseLibrary(mapping, request.mediaType, isAnime(details.keywordIds), choice);
-  await updateRequest(config, requestId, libraryUpdateBody(request, target, mapping.is4k));
+  await updateRequest(config, requestId, libraryUpdateBody(request, target));
   await approveRequest(config, requestId);
   await publishLiveEvent({ type: "seerr.changed" });
   return target;

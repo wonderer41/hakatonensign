@@ -71,7 +71,6 @@ export const movieDetails = {
   title: "The Matrix",
   originalTitle: "The Matrix",
   releaseDate: "1999-03-31",
-  posterPath: "/f89U3ADr1oiB1s9GkdPOEpXUk5H.jpg",
   overview: "…",
   keywords: [
     { id: 310, name: "artificial intelligence (a.i.)" },
@@ -86,7 +85,6 @@ export const animeMovieDetails = {
   title: "Spirited Away",
   originalTitle: "千と千尋の神隠し",
   releaseDate: "2001-07-20",
-  posterPath: "/39wmItIWsg5sZMyRUHLkWBcuVCM.jpg",
   keywords: [
     { id: 210024, name: "anime" },
     { id: 3205, name: "fairy tale" },
@@ -98,7 +96,6 @@ export const animeTvDetails = {
   name: "Attack on Titan",
   originalName: "進撃の巨人",
   firstAirDate: "2013-04-07",
-  posterPath: "/hTP1DtLGFamjfu8WqjnuQdP1n4i.jpg",
   keywords: [
     { id: 210024, name: "anime" },
     { id: 12554, name: "dark fantasy" },

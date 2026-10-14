@@ -1,5 +1,7 @@
 import type { Alert, Prisma, Sprint } from "@/generated/prisma/client";
+import { dashboardTimeZone } from "@/lib/time/zone";
 import type { AlertDto, ChecklistItemDto, SprintDto, WorkCardDto } from "@/types/dashboard-contracts";
+import { formatMetaLine } from "./meta-line";
 
 // Prisma row → DTO mappers shared by /api/hermes/* and, later, /api/today and the browser routes.
 
@@ -115,8 +117,7 @@ export function toWorkCardDto(row: CardRow): WorkCardDto {
     status: row.status,
     position: row.position,
     createdBy: row.createdBy,
-    // Formatted by the GitHub sync step once it defines what goes in meta.
-    metaLine: null,
+    metaLine: formatMetaLine(row, new Date(), dashboardTimeZone()),
     progress: { done: items.filter((item) => item.done).length, total: items.length },
     current: current ? { itemId: current.item.id, label: current.label } : null,
     hermesSuggestion: row.hermesSuggestion,

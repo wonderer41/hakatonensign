@@ -54,7 +54,7 @@ test("approve (movie, Temp): moves the request to the Temp library, then approve
     ["GET /api/v1/request/42", "GET /api/v1/movie/603", "PUT /api/v1/request/42", "POST /api/v1/request/42/approve"],
   );
   assert.ok(calls.every((call) => call.apiKey === "test-api-key"));
-  assert.deepEqual(calls[2].body, { mediaType: "movie", serverId: 0, rootFolder: "/media/movies-temp", profileId: 4, is4k: false });
+  assert.deepEqual(calls[2].body, { mediaType: "movie", serverId: 0, rootFolder: "/media/movies-temp", profileId: 4 });
 });
 
 test("approve (anime show, Permanent): lands in the anime library with its seasons", async () => {
@@ -65,7 +65,7 @@ test("approve (anime show, Permanent): lands in the anime library with its seaso
 
   const target = await approveSeerrRequest(43, "permanent", env);
   assert.equal(target.kind, "anime");
-  assert.deepEqual(calls[2].body, { mediaType: "tv", serverId: 1, rootFolder: "/media/anime-tv", profileId: 2, seasons: [1, 2], is4k: false });
+  assert.deepEqual(calls[2].body, { mediaType: "tv", serverId: 1, rootFolder: "/media/anime-tv", profileId: 2, seasons: [1, 2] });
 });
 
 test("approve refuses a request that is no longer pending, without touching it", async () => {

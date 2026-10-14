@@ -6,8 +6,6 @@ export type SeerrMediaType = SeerrRequestDto["mediaType"];
 /** MediaRequestStatus in Seerr (server/constants/media.ts): 1 pending, 2 approved, 3 declined, 4 failed, 5 completed. */
 export const SEERR_STATUS_PENDING = 1;
 
-export const TMDB_POSTER_BASE = "https://image.tmdb.org/t/p/w185";
-
 /** The parts of a Seerr MediaRequest the dashboard uses. */
 export interface SeerrRequest {
   id: number;
@@ -34,7 +32,6 @@ export interface SeerrMediaDetails {
   mediaType: SeerrMediaType;
   title: string;
   year: number | null;
-  posterPath: string | null;
   /** TMDB keyword ids; null when Seerr sent no keyword list (anime can't be told apart then). */
   keywordIds: number[] | null;
 }
@@ -114,11 +111,6 @@ function yearOf(date: unknown): number | null {
   return match ? Number(match[1]) : null;
 }
 
-function posterPathOf(value: unknown): string | null {
-  // TMDB paths look like "/kqjL17yufvn9OVLyXYpvtyrFfak.jpg"; anything else is not turned into a URL.
-  return typeof value === "string" && /^\/[A-Za-z0-9_-]+\.(jpg|jpeg|png|webp)$/i.test(value) ? value : null;
-}
-
 function keywordIdsOf(value: unknown): number[] | null {
   if (!Array.isArray(value)) return null;
   return value
@@ -136,7 +128,6 @@ export function parseSeerrMediaDetails(value: unknown, mediaType: SeerrMediaType
     mediaType,
     title,
     year: yearOf(mediaType === "movie" ? value.releaseDate : value.firstAirDate),
-    posterPath: posterPathOf(value.posterPath),
     keywordIds: keywordIdsOf(value.keywords),
   };
 }
@@ -150,7 +141,6 @@ export function toSeerrRequestDto(request: SeerrRequest, details: SeerrMediaDeta
     mediaType: request.mediaType,
     seasons: request.mediaType === "tv" ? request.seasons : null,
     requestedBy: request.requestedBy,
-    posterUrl: details?.posterPath ? `${TMDB_POSTER_BASE}${details.posterPath}` : null,
     createdAt: request.createdAt,
   };
 }

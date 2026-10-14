@@ -91,7 +91,7 @@ Header "Working on", plus the active sprint name and days left (decision D8 sett
 
 **Waiting on you** (glass panel)
 - **Gmail:** `1 starred thread needs a reply` (from the gmail snapshot).
-- **Seerr:** button card `2 guest requests to approve` → opens a bubble listing pending requests: poster placeholder (44×66), title, type, requested by; a **Temp | Permanent** segmented switch (default Temp, Gerardo's rule for guests); **Approve** / **Decline**. Handled rows gray out with `Approved → Temp library` / `Declined`; the count drops. An `Open Seerr ↗` link goes to `https://requests.wonderer41.org`.
+- **Seerr:** button card `2 guest requests to approve` → opens a bubble listing pending requests: title, year, type, requested by (no posters, Gerardo's decision); a **Temp | Permanent** segmented switch (default Temp, Gerardo's rule for guests); **Approve** / **Decline**. Handled rows gray out with `Approved → Temp library` / `Declined`; the count drops. An `Open Seerr ↗` link goes to `https://requests.wonderer41.org`.
 - **Orphan review:** split in two link tiles, **Sonarr ↗** (`n episodes`) and **Radarr ↗** (`n movies`). URLs come from `SONARR_URL` / `RADARR_URL` (NPM domains, see `docs/06-INTEGRATIONS.md`).
 
 Each item hides itself when its count is zero; the whole panel shows "Nothing waiting." when all are empty.
