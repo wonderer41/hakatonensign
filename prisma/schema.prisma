@@ -132,6 +132,8 @@ model Sprint {
   endsOn      DateTime     @db.Date
   status      SprintStatus @default(planned)
   createdBy   Actor        @default(user)
+  /// Optimistic concurrency, same rule as WorkCard.version (D15).
+  version     Int          @default(1)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   cards       WorkCard[]
