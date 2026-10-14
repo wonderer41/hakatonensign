@@ -6,8 +6,8 @@ import { readWatchlist, replaceWatchlist } from "@/lib/integrations/stocks/watch
 
 async function main(): Promise<void> {
   const symbols = process.argv.slice(2).flatMap((arg) => arg.split(/[\s,]+/));
-  const saved = await replaceWatchlist(symbols);
-  console.log(`Watchlist (${saved.length}): ${saved.join(" ")}`);
+  const { symbols: saved, changed } = await replaceWatchlist(symbols, "user");
+  console.log(`Watchlist (${saved.length})${changed ? "" : " unchanged"}: ${saved.join(" ")}`);
   const missing = (await readWatchlist()).filter((entry) => entry.sixMonthChangePct === null).map((entry) => entry.symbol);
   if (missing.length) console.log(`  no cached 6M yet: ${missing.join(", ")} (npm run sync:stocks:history, or the next sync:stocks fetches it)`);
 }

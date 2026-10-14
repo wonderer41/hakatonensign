@@ -1,5 +1,7 @@
 import type { Actor, Prisma, Sprint } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db/prisma";
+import { HttpError } from "@/lib/api/http";
+import { describeRef, refWhere, type RowRef } from "@/lib/hermes/keys";
 import type { SprintInput } from "@/lib/hermes/parse";
 import { publishLiveEvent } from "@/lib/live/publish";
 import { dashboardTimeZone, localDateString } from "@/lib/time/zone";
@@ -54,9 +56,12 @@ interface Outcome {
   closedIds: string[];
 }
 
-/** Idempotent create/update of a sprint by its externalKey (PUT /api/hermes/sprints/:key). */
+/**
+ * Idempotent create/update of a sprint (PUT /api/hermes/sprints/:key). By key it creates the
+ * sprint when missing; by id (page-created sprints) it only updates, and a missing id is 404.
+ */
 export async function upsertSprint(
-  key: string,
+  ref: RowRef,
   input: SprintInput,
   options: { actor?: Actor; now?: Date } = {},
 ): Promise<HermesWriteResult<SprintDto>> {
@@ -64,11 +69,12 @@ export async function upsertSprint(
   const outcome = await retryOnUniqueViolation(async () => {
     try {
       return await prisma.$transaction(async (tx): Promise<Outcome> => {
-        const existing = await tx.sprint.findUnique({ where: { externalKey: key } });
+        const existing = await tx.sprint.findUnique({ where: refWhere(ref) });
         if (!existing) {
+          if (ref.kind === "id") throw new HttpError("NOT_FOUND", `No sprint has ${describeRef(ref)}`);
           const row = await tx.sprint.create({
             data: {
-              externalKey: key,
+              externalKey: ref.key,
               name: input.name,
               goal: input.goal ?? null,
               startsOn: toDbDate(input.startsOn),
@@ -95,7 +101,7 @@ export async function upsertSprint(
       });
     } catch (error) {
       if (!(error instanceof VersionConflict)) throw error;
-      const current = await prisma.sprint.findUniqueOrThrow({ where: { externalKey: key } });
+      const current = await prisma.sprint.findUniqueOrThrow({ where: refWhere(ref) });
       throw conflictError("sprint", new VersionConflict(error.reason, error.fields, current.version, error.sentVersion), toSprintDto(current, today(now)));
     }
   });
@@ -108,8 +114,12 @@ export async function upsertSprint(
   return { data: toSprintDto(row, today(now)), created: outcome.created };
 }
 
-/** Resolves a sprint key to its id for linking cards. */
-export async function findSprintIdByKey(tx: Prisma.TransactionClient, key: string): Promise<string | null> {
-  const row = await tx.sprint.findUnique({ where: { externalKey: key }, select: { id: true } });
+/**
+ * Resolves a card's sprintKey to the sprint id for linking cards; null when no such sprint.
+ * Takes a parsed ref (key or id:<uuid>), or a plain key string.
+ */
+export async function findSprintIdByKey(tx: Prisma.TransactionClient, ref: RowRef | string): Promise<string | null> {
+  const where = typeof ref === "string" ? { externalKey: ref } : refWhere(ref);
+  const row = await tx.sprint.findUnique({ where, select: { id: true } });
   return row?.id ?? null;
 }

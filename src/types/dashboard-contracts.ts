@@ -11,6 +11,8 @@ export type ScheduleStatus = "checking" | "conflict" | "booked" | "failed" | "ca
 export type BannerKind = "gmail" | "orphans" | "scan" | "stocks";
 export type AlertSeverity = "warning" | "critical";
 export type GapTone = "short" | "medium" | "long" | "overlap"; // <30m, 30–60m, >60m, negative
+export type ProgressKind = "looks_done" | "partial";
+export type ProgressStatus = "pending" | "confirmed" | "dismissed";
 
 // ---------- Sprints, cards, checklist ----------
 
@@ -25,6 +27,20 @@ export interface SprintDto {
   /** Local calendar days from today to endsOn (0 on the last day); null unless active. */
   daysLeft: number | null;
   version: number;
+}
+
+/** What one push did to one checklist item, as judged by Hermes (D7). */
+export interface ItemProgressDto {
+  id: string;
+  /** looks_done: "looks done from push X — confirm?" (never checks the item by itself); partial: progress note. */
+  kind: ProgressKind;
+  status: ProgressStatus;
+  note: string;
+  repoFullName: string;
+  commitSha: string;
+  /** https://github.com/{repoFullName}/commit/{commitSha} */
+  commitUrl: string;
+  pushedAt: string;
 }
 
 export interface ChecklistItemDto {
@@ -42,6 +58,11 @@ export interface ChecklistItemDto {
   version: number;
   /** Next upcoming work block for this item, if booked. */
   scheduled: { calendarEventId: string; startsAt: string; endsAt: string } | null;
+  /**
+   * Pending push notes, newest push first; empty once the item is done. Confirm or dismiss with
+   * POST /api/items/:id/progress/:progressId/{confirm|dismiss}.
+   */
+  progress: ItemProgressDto[];
 }
 
 export interface WorkCardDto {
@@ -277,11 +298,14 @@ export type LiveEvent =
   | { type: "day.rollover"; date: string };
 
 // ---------- Hermes write API (/api/hermes/*, bearer HERMES_DASHBOARD_TOKEN) ----------
+// Path segments for cards, items and sprints take the row's key or "id:<uuid>" (rows created on
+// the page have no key). An id that does not exist is 404; ids never create rows.
 
 export interface HermesUpsertCard {
   title: string;
   repoFullName?: string | null;
   milestoneTitle?: string | null;
+  /** The sprint's key or "id:<uuid>"; null unlinks the card. */
   sprintKey?: string | null;
   status?: CardStatus;
   position?: number;
@@ -333,6 +357,31 @@ export interface HermesWriteResult<T> {
   created: boolean;
 }
 
+/**
+ * PUT /api/hermes/cards/:key/items/:itemKey/progress/:sha (D7). One note per push per item,
+ * upserted by (item, sha). Response: HermesWriteResult<ItemProgressDto>.
+ */
+export interface HermesUpsertItemProgress {
+  repoFullName: string; // "owner/repo"
+  kind: ProgressKind;
+  note: string; // ≤ 500 characters
+  pushedAt: string; // ISO
+}
+
+/** GET and PUT /api/hermes/watchlist (D9). */
+export interface HermesWatchlist {
+  symbols: string[];
+}
+
+export interface HermesWatchlistResult extends HermesWriteResult<HermesWatchlist> {
+  /** False when the stored list already was exactly these symbols in this order. */
+  changed: boolean;
+  /** True when the stocks banner was refreshed right away (only tried when the list changed). */
+  synced: boolean;
+  /** Why the refresh did not run or failed, or which symbols had no quote. Never contains secrets. */
+  syncError?: string;
+}
+
 /** `details` of a 409 CONFLICT from a Hermes upsert: re-read, then retry with currentVersion or force. */
 export interface HermesConflictDetails<T> {
   reason: "version_required" | "stale_version" | "done_is_user_owned";
@@ -365,9 +414,10 @@ export interface HermesCalendarChangedResult {
 }
 
 // GET /api/hermes/state — compact on purpose (Hermes reads it before every write).
-// Rows Gerardo created on the page have key: null; Hermes can see them but not address them.
+// Rows Gerardo created on the page have key: null; Hermes addresses them as "id:<id>".
 
 export interface HermesStateSprint {
+  id: string;
   key: string | null;
   name: string;
   goal: string | null;
@@ -379,6 +429,7 @@ export interface HermesStateSprint {
 }
 
 export interface HermesStateItem {
+  id: string;
   key: string | null;
   title: string;
   issueNumber: number | null;
@@ -386,19 +437,23 @@ export interface HermesStateItem {
   isCurrent: boolean;
   position: number;
   version: number;
+  /** Push notes still waiting for Gerardo, so Hermes does not suggest the same push again. */
+  progress: { kind: ProgressKind; commitSha: string }[];
 }
 
 export interface HermesStateCard {
+  id: string;
   key: string | null;
   title: string;
   status: CardStatus;
+  sprintId: string | null;
   sprintKey: string | null;
   repoFullName: string | null;
   milestoneTitle: string | null;
   hermesSuggestion: string | null;
   position: number;
   progress: { done: number; total: number };
-  current: { itemKey: string | null; title: string; label: "now" | "next" } | null;
+  current: { itemId: string; itemKey: string | null; title: string; label: "now" | "next" } | null;
   version: number;
   items: HermesStateItem[];
 }
@@ -424,4 +479,6 @@ export interface HermesStateResponse {
   /** Open alerts only. */
   alerts: HermesStateAlert[];
   dailyMessage: HermesDailyMessage | null;
+  /** Stocks watchlist in banner order (D9). */
+  watchlist: string[];
 }

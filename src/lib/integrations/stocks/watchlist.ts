@@ -1,8 +1,9 @@
+import type { Actor } from "@/generated/prisma/client";
 import { HttpError } from "@/lib/api/http";
 import { prisma } from "@/lib/db/prisma";
+import { SYMBOL_PATTERN } from "./symbols";
 
 const POSITION_GAP = 1000;
-const SYMBOL_PATTERN = /^[A-Z][A-Z0-9.-]{0,15}$/;
 
 export interface WatchlistEntry {
   symbol: string;
@@ -27,20 +28,32 @@ export function normalizeSymbols(input: string[]): string[] {
   return symbols;
 }
 
-/** Replaces the whole list. Symbols that stay keep their cached 6M value. */
-export async function replaceWatchlist(input: string[]): Promise<string[]> {
+export interface WatchlistReplaceResult {
+  symbols: string[];
+  /** False when the stored list already had exactly these symbols in this order. */
+  changed: boolean;
+}
+
+/**
+ * Replaces the whole list. Symbols that stay keep their cached 6M value and their addedBy;
+ * new ones are recorded as added by `actor`.
+ */
+export async function replaceWatchlist(input: string[], actor: Actor = "user"): Promise<WatchlistReplaceResult> {
   const symbols = normalizeSymbols(input);
-  await prisma.$transaction([
-    prisma.watchlistSymbol.deleteMany({ where: { symbol: { notIn: symbols } } }),
-    ...symbols.map((symbol, index) =>
-      prisma.watchlistSymbol.upsert({
+  return prisma.$transaction(async (tx) => {
+    const before = await tx.watchlistSymbol.findMany({ orderBy: [{ position: "asc" }, { symbol: "asc" }], select: { symbol: true } });
+    const changed = before.length !== symbols.length || before.some((row, index) => row.symbol !== symbols[index]);
+    if (!changed) return { symbols, changed };
+    await tx.watchlistSymbol.deleteMany({ where: { symbol: { notIn: symbols } } });
+    for (const [index, symbol] of symbols.entries()) {
+      await tx.watchlistSymbol.upsert({
         where: { symbol },
-        create: { symbol, position: (index + 1) * POSITION_GAP, addedBy: "user" },
-        update: { position: (index + 1) * POSITION_GAP, addedBy: "user" },
-      }),
-    ),
-  ]);
-  return symbols;
+        create: { symbol, position: (index + 1) * POSITION_GAP, addedBy: actor },
+        update: { position: (index + 1) * POSITION_GAP },
+      });
+    }
+    return { symbols, changed };
+  });
 }
 
 export function emptyWatchlistError(): HttpError {
