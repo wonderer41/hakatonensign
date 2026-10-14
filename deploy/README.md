@@ -42,8 +42,55 @@ The stack has four services, all from one image except Postgres:
 4. **Check it** on the host: `curl http://127.0.0.1:4849/api/health` returns
    `{"ok":true,"db":true,...}`. Then point the Nginx Proxy Manager host at port 4849.
 
-Port 4849 is bound on all host interfaces (host networking). Restrict it with the host firewall
-if only Nginx Proxy Manager should reach it.
+Port 4849 is bound on all host interfaces (host networking). `DASHBOARD_ALLOWED_CIDRS` decides who
+may use it; see [Access control](#access-control).
+
+## Access control
+
+Two layers, each gating a different way in:
+
+| Layer | Gates | Set in |
+|---|---|---|
+| Nginx Proxy Manager access list | the public hostname | NPM -> Access Lists (LAN / NetBird / Tailscale) |
+| `DASHBOARD_ALLOWED_CIDRS` | direct connections to `:4849` | the stack's `.env` |
+
+The app checks the address that opened the TCP connection and never trusts `X-Forwarded-For`, so a
+client cannot talk its way in with a header. Two consequences:
+
+- Requests through NPM arrive from NPM's container address on its Docker network, so that network's
+  range must be on the list. NPM's own access list still filters the real clients.
+- Loopback (`127.0.0.0/8`, `::1`) is always allowed: the healthcheck and Hermes calling
+  `http://127.0.0.1:4849` work without listing anything. Anything on the host that uses the host's
+  LAN IP instead arrives from that LAN IP and needs the LAN range.
+
+Fill in these ranges (comma-separated; IPv6 ranges too if clients connect over IPv6):
+
+1. **LAN**, e.g. `192.168.1.0/24`.
+2. **NetBird**: the range in the NetBird dashboard, or `ip -4 addr show wt0` on the host.
+3. **Tailscale**: the range in the admin console, or `ip -4 addr show tailscale0` on the host.
+4. **NPM's Docker network**: find the network with
+   `docker inspect <npm-container> -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}'`,
+   then its range with `docker network inspect <network> -f '{{range .IPAM.Config}}{{.Subnet}}{{end}}'`.
+
+```
+DASHBOARD_ALLOWED_CIDRS=192.168.1.0/24,100.64.0.0/10,172.18.0.0/16
+```
+
+The values above are placeholders. Left empty, everyone is allowed and the app logs
+`[acl] DASHBOARD_ALLOWED_CIDRS is not set; every client is allowed` at startup.
+
+**Apply a change:** edit `DASHBOARD_ALLOWED_CIDRS` in the stack's Environment in Komodo (the stack
+`.env`) and redeploy the stack; with plain compose, `docker compose up -d app` recreates only `app`.
+Then check `docker logs <stack>-app-1 2>&1 | grep '\[acl\]'`:
+
+- `[acl] allowing loopback and 192.168.1.0/24, ...`: the list is active.
+- `[acl] DASHBOARD_ALLOWED_CIDRS: "<entry>" ...`: a bad entry. The app exits instead of allowing
+  everyone, and the container keeps restarting until the entry is fixed.
+- `[acl] denied 192.168.1.77 (3 requests)`: a refused client, logged at most once per address per
+  minute. The client gets `403 {"error":{"code":"FORBIDDEN",...}}`.
+
+The list is applied by `scripts/server.ts`, which the image must start
+(`node --import tsx scripts/server.ts`). Plain `next start` serves the app without it.
 
 ## Updating
 

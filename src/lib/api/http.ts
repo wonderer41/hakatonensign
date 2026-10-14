@@ -3,6 +3,7 @@ import type { ApiError, ApiErrorCode } from "@/types/contracts";
 const STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   VALIDATION_ERROR: 400,
   UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
   NOT_FOUND: 404,
   CONFLICT: 409,
   RATE_LIMITED: 429,
