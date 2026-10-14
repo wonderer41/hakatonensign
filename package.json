@@ -17,7 +17,9 @@
     "sync:stocks": "tsx scripts/sync-stocks.ts",
     "sync:stocks:history": "tsx scripts/sync-stocks-history.ts",
     "stocks:watchlist": "tsx scripts/stocks-watchlist.ts",
-    "hermes:smoke": "tsx scripts/hermes-smoke.ts"
+    "hermes:smoke": "tsx scripts/hermes-smoke.ts",
+    "worker": "tsx scripts/worker.ts",
+    "live:tail": "tsx scripts/live-tail.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",

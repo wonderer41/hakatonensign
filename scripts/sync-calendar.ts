@@ -1,11 +1,12 @@
-// Runs one Google Calendar sync into the CalendarEvent cache and prints the resulting timeline.
+// Runs one Google Calendar sync into the CalendarEvent cache, publishes timeline.changed for the
+// affected dates (the same run as the worker's calendar-sync job) and prints the resulting timeline.
 // Usage: npm run sync:calendar [-- --date YYYY-MM-DD]
 import "dotenv/config";
 import { prisma } from "@/lib/db/prisma";
-import { syncCalendarTimeline } from "@/lib/integrations/google-calendar/timeline-sync";
 import { NOW_MARKER_ID } from "@/lib/timeline/build";
 import { getTimeline } from "@/lib/timeline/query";
 import { dashboardTimeZone, formatClock, isDateString, localDateString } from "@/lib/time/zone";
+import { runCalendarSync } from "@/lib/worker/jobs";
 
 function dateArgument(): string | null {
   const index = process.argv.indexOf("--date");
@@ -25,13 +26,14 @@ async function main(): Promise<void> {
   const now = new Date();
   const date = dateArgument() ?? localDateString(now, timeZone);
 
-  const sync = await syncCalendarTimeline(now);
+  const { sync, publishedDates } = await runCalendarSync(now);
   console.log(`Calendar sync · ${sync.calendarId}`);
   const lastDay = localDateString(new Date(new Date(sync.window.end).getTime() - 1), timeZone);
   console.log(`  window     ${localDateString(new Date(sync.window.start), timeZone)} → ${lastDay} (${timeZone})`);
   console.log(`  fetched ${sync.fetched} · created ${sync.created} · updated ${sync.updated} · cancelled ${sync.cancelled} · unchanged ${sync.unchanged}`);
   if (!sync.complete) console.log("  warning    Google had more events than one sync reads; deleted events were not cancelled this run");
   if (sync.changedDates.length) console.log(`  changed    ${sync.changedDates.join(", ")}`);
+  if (publishedDates.length) console.log(`  published  timeline.changed for ${publishedDates.join(", ")}`);
 
   const timeline = await getTimeline(date, now);
   console.log(`\nTimeline · ${timeline.date} (${timeline.timeZone})`);
