@@ -19,7 +19,9 @@
     "stocks:watchlist": "tsx scripts/stocks-watchlist.ts",
     "hermes:smoke": "tsx scripts/hermes-smoke.ts",
     "worker": "tsx scripts/worker.ts",
-    "live:tail": "tsx scripts/live-tail.ts"
+    "live:tail": "tsx scripts/live-tail.ts",
+    "seerr:settings": "tsx scripts/seerr-settings.ts",
+    "seerr:pending": "tsx scripts/seerr-pending.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",

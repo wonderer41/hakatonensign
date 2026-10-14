@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db/prisma";
 import { syncCalendarTimeline } from "@/lib/integrations/google-calendar/timeline-sync";
+import { checkSeerrPending } from "@/lib/integrations/seerr/pending";
 import { syncStockHistory, syncStockQuotes } from "@/lib/integrations/stocks/sync";
 import { publishLiveEvent, sendLiveEvent } from "@/lib/live/publish";
 import { dashboardTimeZone, localDateString } from "@/lib/time/zone";
@@ -22,6 +23,9 @@ export function runCalendarSync(now = new Date(), env: NodeJS.ProcessEnv = proce
     publish: publishLiveEvent,
   });
 }
+
+// Pending count from the previous poll; checkSeerrPending publishes seerr.changed when it differs.
+let lastSeerrPending: number | null = null;
 
 function failedSummary(failed: { symbol: string }[]): string {
   return failed.length ? ` · failed ${failed.map((entry) => entry.symbol).join(", ")}` : "";
@@ -52,6 +56,16 @@ export const workerJobs: WorkerJob[] = [
     name: "retention",
     trigger: { dailyAt: { hour: 3, minute: 30 } },
     run: async ({ now, timeZone }) => formatRetentionResult(await runRetention(prisma, now, timeZone)),
+  },
+  {
+    // Waiting panel count (docs/04-API.md, section D). The first poll after a restart publishes too.
+    name: "seerr-poll",
+    trigger: { everyMs: 2 * MINUTE },
+    run: async () => {
+      const result = await checkSeerrPending(lastSeerrPending);
+      lastSeerrPending = result.count;
+      return `${result.count} pending${result.changed ? " · changed" : ""}`;
+    },
   },
   {
     // Finnhub quotes → stocks banner snapshot (D9). Publishes banner.updated itself.
