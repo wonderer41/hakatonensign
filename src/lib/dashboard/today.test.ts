@@ -124,7 +124,7 @@ function parts(overrides: Partial<TodayParts> = {}): TodayParts {
     snapshots: [gmail, orphans],
     dailyMessage: { date: new Date("2026-10-14T00:00:00Z"), text: "Go slow.", author: "hermes", updatedAt: AT },
     seerr: { count: 2, source: { ok: true, lastSyncAt: NOW.toISOString(), error: null } },
-    links: { sonarrUrl: "https://sonarr.example.com", radarrUrl: null },
+    links: { sonarrUrl: "https://sonarr.example.com", radarrUrl: null, seerrUrl: "https://requests.example.com" },
     ...overrides,
   };
 }
@@ -150,6 +150,7 @@ test("today: assembles banner, working-on, warnings and sources from what was re
     gmailNeedsReply: 1,
     seerrPending: 2,
     orphans: { sonarr: 5, radarr: 1, sonarrUrl: "https://sonarr.example.com", radarrUrl: null },
+    seerrUrl: "https://requests.example.com",
   });
   assert.deepEqual(today.sources.calendar, { ok: true, lastSyncAt: today.timeline.lastSyncAt, error: null });
   assert.equal(today.sources.seerr.ok, true);
@@ -204,7 +205,7 @@ test("Seerr count: answer, upstream error, timeout, unexpected error", async () 
   assert.deepEqual(odd, { count: null, source: { ok: false, lastSyncAt: null, error: "Seerr is unavailable" } });
 });
 
-test("Sonarr/Radarr links: http(s) only, blank is null", () => {
+test("Sonarr/Radarr/Seerr links: http(s) only, blank is null", () => {
   assert.equal(linkFromEnv(" https://sonarr.example.com "), "https://sonarr.example.com");
   assert.equal(linkFromEnv(""), null);
   assert.equal(linkFromEnv(undefined), null);

@@ -43,7 +43,7 @@ export interface TodayParts {
   snapshots: SnapshotRow[];
   dailyMessage: DailyMessage | null;
   seerr: SeerrCheck;
-  links: { sonarrUrl: string | null; radarrUrl: string | null };
+  links: { sonarrUrl: string | null; radarrUrl: string | null; seerrUrl: string | null };
 }
 
 type SnapshotData<K extends BannerKind> = Extract<BannerPayload, { kind: K }>["payload"];
@@ -111,7 +111,10 @@ async function liveSeerrPending(now: Date, env: NodeJS.ProcessEnv): Promise<Seer
   return result;
 }
 
-/** SONARR_URL / RADARR_URL are links only (D11); anything that is not http(s) is dropped so it can't become a script link. */
+/**
+ * SONARR_URL / RADARR_URL (D11) and SEERR_PUBLIC_URL are links only; anything that is not http(s) is
+ * dropped so it can't become a script link.
+ */
 export function linkFromEnv(value: string | undefined): string | null {
   const raw = value?.trim();
   if (!raw) return null;
@@ -157,6 +160,7 @@ export function assembleToday(parts: TodayParts): TodayResponse {
           sonarrUrl: parts.links.sonarrUrl,
           radarrUrl: parts.links.radarrUrl,
         },
+        seerrUrl: parts.links.seerrUrl,
       },
     },
     sources: {
@@ -199,6 +203,10 @@ export async function getToday(date: string, now = new Date(), env: NodeJS.Proce
     snapshots,
     dailyMessage,
     seerr,
-    links: { sonarrUrl: linkFromEnv(env.SONARR_URL), radarrUrl: linkFromEnv(env.RADARR_URL) },
+    links: {
+      sonarrUrl: linkFromEnv(env.SONARR_URL),
+      radarrUrl: linkFromEnv(env.RADARR_URL),
+      seerrUrl: linkFromEnv(env.SEERR_PUBLIC_URL),
+    },
   });
 }

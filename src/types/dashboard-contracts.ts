@@ -276,6 +276,8 @@ export interface WaitingDto {
   /** Live count from Seerr; null when Seerr is unavailable or not configured (see TodayResponse.sources.seerr). */
   seerrPending: number | null;
   orphans: { sonarr: number; radarr: number; sonarrUrl: string | null; radarrUrl: string | null };
+  /** Browser link for "Open Seerr ↗" (SEERR_PUBLIC_URL, http(s) only); null when not set. */
+  seerrUrl: string | null;
 }
 
 // ---------- Whole page ----------
