@@ -6,15 +6,22 @@
 // Each run uses fresh keys; the card is archived at the end, the alert resolved, the sprint
 // stays "planned" (never active, so a real active sprint is never closed), and the stocks
 // snapshot is dated 2000-01-01 so it never becomes the newest one on the page.
-// The script sends ~32 requests; the API allows 60 per minute.
+// It also sets the stocks watchlist to the 12 default symbols (D9); when that changed the list
+// and FINNHUB_API_KEY is set on the server, the stocks banner is refreshed.
+// The script sends 52 /api/hermes/* requests (the API allows 60 per minute, so wait a minute
+// between runs) plus a few same-origin browser requests (confirm/dismiss push notes).
 import "dotenv/config";
+import { randomBytes, randomUUID } from "node:crypto";
 import type {
   AlertDto,
   ChecklistItemDto,
   HermesBannerResult,
   HermesConflictDetails,
   HermesStateResponse,
+  HermesWatchlist,
+  HermesWatchlistResult,
   HermesWriteResult,
+  ItemProgressDto,
   SprintDto,
   WorkCardDto,
 } from "@/types/dashboard-contracts";
@@ -32,10 +39,14 @@ interface ErrorBody {
   error: { code: string; message: string; details?: unknown };
 }
 
-async function call<T>(method: string, path: string, body?: unknown, bearer = token): Promise<Reply<T>> {
+/** bearer null = a browser request (same origin, no Authorization header). */
+async function call<T>(method: string, path: string, body?: unknown, bearer: string | null = token): Promise<Reply<T>> {
   const response = await fetch(`${base}${path}`, {
     method,
-    headers: { Authorization: `Bearer ${bearer}`, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+    headers: {
+      ...(bearer === null ? {} : { Authorization: `Bearer ${bearer}` }),
+      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const text = await response.text();
@@ -50,6 +61,9 @@ async function call<T>(method: string, path: string, body?: unknown, bearer = to
 
 const enc = encodeURIComponent;
 let failures = 0;
+
+/** D9 starting watchlist. */
+const DEFAULT_WATCHLIST = ["NVDA", "AMD", "MU", "TSLA", "AMZN", "XOM", "CVX", "COP", "CEG", "VST", "NEE", "TSM"];
 
 function check(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -97,6 +111,10 @@ async function main(): Promise<void> {
 
   const cardPath = `/api/hermes/cards/${enc(cardKey)}`;
   const itemPath = (index: number) => `${cardPath}/items/${enc(itemKeys[index])}`;
+  const idPath = (id: string) => enc(`id:${id}`);
+  const shaA = randomBytes(20).toString("hex");
+  const shaB = randomBytes(20).toString("hex");
+  const pushRepo = `smoke-owner/smoke-${run}`;
   const alertPath = `/api/hermes/alerts/${enc(alertKey)}`;
 
   console.log(`Hermes smoke · ${base} · run ${run}\n`);
@@ -252,6 +270,158 @@ async function main(): Promise<void> {
     const forced = await call<HermesWriteResult<ChecklistItemDto>>("PUT", itemPath(0), { ...itemBodies[0], done: true, force: true });
     expectStatus(forced, 200);
     check(forced.body.data.done && forced.body.data.doneAt !== null, "item should be done");
+  });
+
+  // ---- Addressing by id:<uuid> (cards, items and sprints created on the page have no key) ----
+  await step("state lists ids for the sprint, card and items", async () => {
+    const body = await state();
+    const found = body.cards.find((c) => c.key === cardKey);
+    check(found && found.id === card?.id, "state card.id should match the card");
+    check(found.sprintId === sprint?.id && found.sprintKey === sprintKey, "state card should carry sprintId and sprintKey");
+    check(body.sprints.some((s) => s.id === sprint?.id && s.key === sprintKey), "state sprint should carry its id");
+    check(found.items.every((item, index) => item.id === items[index].id && Array.isArray(item.progress)), "state items should carry ids and progress");
+    check(found.current?.itemId === items[2].id, "state current should carry itemId");
+    check(Array.isArray(body.watchlist), "state should list the watchlist");
+  });
+
+  await step("repeat card via id:<uuid> (sprintKey by id too) → created:false, same version", async () => {
+    const reply = await call<HermesWriteResult<WorkCardDto>>("PUT", `/api/hermes/cards/${idPath(card?.id ?? "")}`, {
+      ...cardBody,
+      sprintKey: `id:${sprint?.id}`,
+      hermesSuggestion: null,
+    });
+    expectStatus(reply, 200);
+    check(reply.body.created === false && reply.body.data.version === card?.version, "card changed on repeat by id");
+  });
+
+  await step("change card via id:<uuid> with the current version", async () => {
+    const reply = await call<HermesWriteResult<WorkCardDto>>("PUT", `/api/hermes/cards/${idPath(card?.id ?? "")}`, {
+      ...cardBody,
+      hermesSuggestion: null,
+      meta: { note: "smoke via id" },
+      version: card?.version,
+    });
+    expectStatus(reply, 200);
+    check(reply.body.data.id === card?.id && reply.body.data.externalKey === cardKey, "should update the same card");
+    check(reply.body.data.version === (card?.version ?? 0) + 1, "version should bump");
+    card = reply.body.data;
+  });
+
+  await step("repeat item via id:<uuid> under the card's id → created:false", async () => {
+    const reply = await call<HermesWriteResult<ChecklistItemDto>>(
+      "PUT",
+      `/api/hermes/cards/${idPath(card?.id ?? "")}/items/${idPath(items[1].id)}`,
+      itemBodies[1],
+    );
+    expectStatus(reply, 200);
+    check(reply.body.created === false && reply.body.data.version === items[1].version, "item changed on repeat by id");
+  });
+
+  await step("unknown id → 404, malformed id → 400", async () => {
+    const missing = await call<ErrorBody>("PUT", `/api/hermes/cards/${idPath(randomUUID())}`, cardBody);
+    expectStatus(missing, 404);
+    check(missing.body.error.code === "NOT_FOUND", "code should be NOT_FOUND");
+    const malformed = await call<ErrorBody>("PUT", `/api/hermes/cards/${enc("id:not-a-uuid")}`, cardBody);
+    expectStatus(malformed, 400);
+    check(JSON.stringify(malformed.body.error.details) === JSON.stringify({ field: "key" }), "details.field should be key");
+  });
+
+  // ---- D7 push notes ----
+  let noteA: ItemProgressDto | undefined;
+  let noteB: ItemProgressDto | undefined;
+  const noteBody = { repoFullName: pushRepo, kind: "looks_done", note: "Step two looks finished in this push", pushedAt: new Date().toISOString() };
+
+  await step("push note looks_done → 201 pending (sha lowercased)", async () => {
+    const reply = await call<HermesWriteResult<ItemProgressDto>>("PUT", `${itemPath(1)}/progress/${shaA.toUpperCase()}`, noteBody);
+    expectStatus(reply, 201);
+    noteA = reply.body.data;
+    check(reply.body.created === true && noteA.status === "pending" && noteA.commitSha === shaA, "note should be pending with the lowercased sha");
+    check(noteA.commitUrl === `https://github.com/${pushRepo}/commit/${shaA}`, "commitUrl should link the commit");
+  });
+
+  await step("repeat push note → 200 created:false", async () => {
+    const reply = await call<HermesWriteResult<ItemProgressDto>>("PUT", `${itemPath(1)}/progress/${shaA}`, noteBody);
+    expectStatus(reply, 200);
+    check(reply.body.created === false && reply.body.data.id === noteA?.id, "repeat should hit the same note");
+  });
+
+  await step("state and the item DTO show the pending note", async () => {
+    const found = (await stateCard()).items.find((item) => item.id === items[1].id);
+    check(found?.progress.some((p) => p.kind === "looks_done" && p.commitSha === shaA), "state item should list the pending note");
+    const reply = await call<HermesWriteResult<ChecklistItemDto>>("PUT", itemPath(1), itemBodies[1]);
+    expectStatus(reply, 200);
+    check(reply.body.data.progress.length === 1 && reply.body.data.progress[0].id === noteA?.id, "item DTO should carry the pending note");
+  });
+
+  await step("confirm looks_done (browser route) → item done, version +1", async () => {
+    const reply = await call<ChecklistItemDto>("POST", `/api/items/${items[1].id}/progress/${noteA?.id}/confirm`, undefined, null);
+    expectStatus(reply, 200);
+    check(reply.body.done && reply.body.doneAt !== null, "item should be done");
+    check(reply.body.version === items[1].version + 1, `version should be ${items[1].version + 1}, got ${reply.body.version}`);
+    check(reply.body.progress.length === 0, "no pending notes should remain");
+    const again = await call<ChecklistItemDto>("POST", `/api/items/${items[1].id}/progress/${noteA?.id}/confirm`, undefined, null);
+    expectStatus(again, 200);
+    check(again.body.version === reply.body.version && again.body.doneAt === reply.body.doneAt, "second confirm should change nothing");
+    items[1] = reply.body;
+  });
+
+  await step("partial note, dismiss (browser route) → hidden, item untouched", async () => {
+    const put = await call<HermesWriteResult<ItemProgressDto>>("PUT", `${itemPath(2)}/progress/${shaB}`, {
+      ...noteBody,
+      kind: "partial",
+      note: "Started step three; tests still missing",
+    });
+    expectStatus(put, 201);
+    noteB = put.body.data;
+    const reply = await call<ChecklistItemDto>("POST", `/api/items/${items[2].id}/progress/${noteB.id}/dismiss`, {}, null);
+    expectStatus(reply, 200);
+    check(!reply.body.done && reply.body.version === items[2].version && reply.body.progress.length === 0, "dismiss should only hide the note");
+    const again = await call<ChecklistItemDto>("POST", `/api/items/${items[2].id}/progress/${noteB.id}/dismiss`, undefined, null);
+    expectStatus(again, 200);
+  });
+
+  await step("dismissed note re-sent with a new kind → pending again", async () => {
+    const reply = await call<HermesWriteResult<ItemProgressDto>>("PUT", `${itemPath(2)}/progress/${shaB}`, { ...noteBody, note: "Step three done" });
+    expectStatus(reply, 200);
+    check(reply.body.created === false && reply.body.data.kind === "looks_done" && reply.body.data.status === "pending", "note should be pending again");
+  });
+
+  await step("note on the wrong item → 404, bad sha → 400", async () => {
+    const wrong = await call<ErrorBody>("POST", `/api/items/${items[0].id}/progress/${noteB?.id}/confirm`, undefined, null);
+    expectStatus(wrong, 404);
+    const bad = await call<ErrorBody>("PUT", `${itemPath(2)}/progress/not-a-sha`, noteBody);
+    expectStatus(bad, 400);
+    check(JSON.stringify(bad.body.error.details) === JSON.stringify({ field: "sha" }), "details.field should be sha");
+  });
+
+  // ---- D9 watchlist ----
+  await step("PUT watchlist (12 defaults)", async () => {
+    const reply = await call<HermesWatchlistResult>("PUT", "/api/hermes/watchlist", { symbols: DEFAULT_WATCHLIST });
+    expectStatus(reply, 200);
+    check(JSON.stringify(reply.body.data.symbols) === JSON.stringify(DEFAULT_WATCHLIST), "symbols should be the defaults in order");
+    check(typeof reply.body.changed === "boolean" && typeof reply.body.synced === "boolean", "changed and synced should be booleans");
+    if (reply.body.changed && !reply.body.synced) check(typeof reply.body.syncError === "string", "syncError should explain why");
+    return `changed ${reply.body.changed}, synced ${reply.body.synced}${reply.body.syncError ? `, syncError: ${reply.body.syncError}` : ""}`;
+  });
+
+  await step("PUT watchlist again, lowercase + duplicate → changed:false", async () => {
+    const reply = await call<HermesWatchlistResult>("PUT", "/api/hermes/watchlist", { symbols: ["nvda", "NVDA", ...DEFAULT_WATCHLIST.slice(1)] });
+    expectStatus(reply, 200);
+    check(JSON.stringify(reply.body.data.symbols) === JSON.stringify(DEFAULT_WATCHLIST), "symbols should be normalized");
+    check(reply.body.changed === false && reply.body.synced === false, "nothing should change or sync");
+  });
+
+  await step("GET watchlist and state.watchlist match", async () => {
+    const reply = await call<{ data: HermesWatchlist }>("GET", "/api/hermes/watchlist");
+    expectStatus(reply, 200);
+    check(JSON.stringify(reply.body.data.symbols) === JSON.stringify(DEFAULT_WATCHLIST), "GET should return the defaults");
+    check(JSON.stringify((await state()).watchlist) === JSON.stringify(DEFAULT_WATCHLIST), "state.watchlist should match");
+  });
+
+  await step("invalid symbol → 400 with details", async () => {
+    const reply = await call<ErrorBody>("PUT", "/api/hermes/watchlist", { symbols: ["1BAD"] });
+    expectStatus(reply, 400);
+    check(JSON.stringify(reply.body.error.details) === JSON.stringify({ field: "symbols[0]" }), "details.field should be symbols[0]");
   });
 
   await step("malformed stocks banner → 400 with details", async () => {

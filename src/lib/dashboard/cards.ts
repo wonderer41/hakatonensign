@@ -1,6 +1,7 @@
 import type { Actor, Prisma, WorkCard } from "@/generated/prisma/client";
 import { HttpError } from "@/lib/api/http";
 import { prisma } from "@/lib/db/prisma";
+import { describeRef, refWhere, type RowRef } from "@/lib/hermes/keys";
 import type { CardInput } from "@/lib/hermes/parse";
 import { publishLiveEvent } from "@/lib/live/publish";
 import type { HermesWriteResult, WorkCardDto } from "@/types/dashboard-contracts";
@@ -22,13 +23,12 @@ async function nextCardPosition(tx: Prisma.TransactionClient): Promise<number> {
   return (_max.position ?? 0) + POSITION_GAP;
 }
 
-async function resolveSprintId(tx: Prisma.TransactionClient, sprintKey: string | null | undefined): Promise<string | null | undefined> {
-  if (sprintKey === undefined || sprintKey === null) return sprintKey;
-  const id = await findSprintIdByKey(tx, sprintKey);
+async function resolveSprintId(tx: Prisma.TransactionClient, sprintRef: RowRef | null | undefined): Promise<string | null | undefined> {
+  if (sprintRef === undefined || sprintRef === null) return sprintRef;
+  const id = await findSprintIdByKey(tx, sprintRef);
   if (!id) {
-    throw new HttpError("NOT_FOUND", `No sprint has key ${sprintKey}; create it first with PUT /api/hermes/sprints/:key`, {
-      field: "sprintKey",
-    });
+    const hint = sprintRef.kind === "key" ? "; create it first with PUT /api/hermes/sprints/:key" : "";
+    throw new HttpError("NOT_FOUND", `No sprint has ${describeRef(sprintRef)}${hint}`, { field: "sprintKey" });
   }
   return id;
 }
@@ -68,9 +68,12 @@ interface Outcome {
   changed: boolean;
 }
 
-/** Idempotent create/update of a Working-on card by its externalKey (PUT /api/hermes/cards/:key). */
+/**
+ * Idempotent create/update of a Working-on card (PUT /api/hermes/cards/:key). By key it creates
+ * the card when missing; by id (page-created cards) it only updates, and a missing id is 404.
+ */
 export async function upsertCard(
-  key: string,
+  ref: RowRef,
   input: CardInput,
   options: { actor?: Actor; now?: Date } = {},
 ): Promise<HermesWriteResult<WorkCardDto>> {
@@ -79,11 +82,12 @@ export async function upsertCard(
     try {
       return await prisma.$transaction(async (tx): Promise<Outcome> => {
         const sprintId = await resolveSprintId(tx, input.sprintKey);
-        const existing = await tx.workCard.findUnique({ where: { externalKey: key } });
+        const existing = await tx.workCard.findUnique({ where: refWhere(ref) });
         if (!existing) {
+          if (ref.kind === "id") throw new HttpError("NOT_FOUND", `No card has ${describeRef(ref)}`);
           const row = await tx.workCard.create({
             data: {
-              externalKey: key,
+              externalKey: ref.key,
               title: input.title,
               repoFullName: input.repoFullName ?? null,
               milestoneTitle: input.milestoneTitle ?? null,
@@ -110,7 +114,7 @@ export async function upsertCard(
       });
     } catch (error) {
       if (!(error instanceof VersionConflict)) throw error;
-      const current = await prisma.workCard.findUniqueOrThrow({ where: { externalKey: key }, include: cardInclude(now) });
+      const current = await prisma.workCard.findUniqueOrThrow({ where: refWhere(ref), include: cardInclude(now) });
       throw conflictError("card", new VersionConflict(error.reason, error.fields, current.version, error.sentVersion), toWorkCardDto(current));
     }
   });
@@ -124,9 +128,9 @@ export async function upsertCard(
  * POST /api/hermes/cards/:key/archive. Hermes never hard-deletes; archiving is an explicit
  * instruction, so it needs no version. Archiving an archived card changes nothing.
  */
-export async function archiveCard(key: string, now = new Date()): Promise<HermesWriteResult<WorkCardDto>> {
-  const existing = await prisma.workCard.findUnique({ where: { externalKey: key }, select: { id: true } });
-  if (!existing) throw new HttpError("NOT_FOUND", `No card has key ${key}`);
+export async function archiveCard(ref: RowRef, now = new Date()): Promise<HermesWriteResult<WorkCardDto>> {
+  const existing = await prisma.workCard.findUnique({ where: refWhere(ref), select: { id: true } });
+  if (!existing) throw new HttpError("NOT_FOUND", `No card has ${describeRef(ref)}`);
   const { count } = await prisma.workCard.updateMany({
     where: { id: existing.id, status: { not: "archived" } },
     data: { status: "archived", version: { increment: 1 } },

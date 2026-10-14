@@ -1,6 +1,6 @@
-import type { Alert, Prisma, Sprint } from "@/generated/prisma/client";
+import type { Alert, ItemProgress, Prisma, Sprint } from "@/generated/prisma/client";
 import { dashboardTimeZone } from "@/lib/time/zone";
-import type { AlertDto, ChecklistItemDto, SprintDto, WorkCardDto } from "@/types/dashboard-contracts";
+import type { AlertDto, ChecklistItemDto, ItemProgressDto, SprintDto, WorkCardDto } from "@/types/dashboard-contracts";
 import { formatMetaLine } from "./meta-line";
 
 // Prisma row → DTO mappers shared by /api/hermes/* and, later, /api/today and the browser routes.
@@ -48,8 +48,14 @@ function upcomingBlocks(now: Date) {
   } satisfies Prisma.ChecklistItem$calendarEventsArgs;
 }
 
+/** Push notes still waiting for Gerardo (D7), newest push first. */
+const pendingProgress = {
+  where: { status: "pending" },
+  orderBy: [{ pushedAt: "desc" }, { createdAt: "desc" }],
+} satisfies Prisma.ChecklistItem$progressArgs;
+
 export function itemInclude(now: Date) {
-  return { calendarEvents: upcomingBlocks(now) } satisfies Prisma.ChecklistItemInclude;
+  return { calendarEvents: upcomingBlocks(now), progress: pendingProgress } satisfies Prisma.ChecklistItemInclude;
 }
 
 export function cardInclude(now: Date) {
@@ -71,6 +77,23 @@ function scheduled(events: { id: string; startsAt: Date; endsAt: Date }[]): Chec
   return next ? { calendarEventId: next.id, startsAt: next.startsAt.toISOString(), endsAt: next.endsAt.toISOString() } : null;
 }
 
+export function commitUrl(repoFullName: string, sha: string): string {
+  return `https://github.com/${repoFullName}/commit/${sha}`;
+}
+
+export function toItemProgressDto(row: ItemProgress): ItemProgressDto {
+  return {
+    id: row.id,
+    kind: row.kind,
+    status: row.status,
+    note: row.note,
+    repoFullName: row.repoFullName,
+    commitSha: row.commitSha,
+    commitUrl: commitUrl(row.repoFullName, row.commitSha),
+    pushedAt: row.pushedAt.toISOString(),
+  };
+}
+
 export function toChecklistItemDto(row: ItemRow): ChecklistItemDto {
   return {
     id: row.id,
@@ -86,6 +109,8 @@ export function toChecklistItemDto(row: ItemRow): ChecklistItemDto {
     createdBy: row.createdBy,
     version: row.version,
     scheduled: scheduled(row.calendarEvents),
+    // A checked item has nothing left to suggest; its notes stay stored but are not shown.
+    progress: row.done ? [] : row.progress.map(toItemProgressDto),
   };
 }
 

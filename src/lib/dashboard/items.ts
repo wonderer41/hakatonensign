@@ -1,6 +1,7 @@
 import type { Actor, ChecklistItem, Prisma } from "@/generated/prisma/client";
 import { HttpError } from "@/lib/api/http";
 import { prisma } from "@/lib/db/prisma";
+import { describeRef, refWhere, type RowRef } from "@/lib/hermes/keys";
 import type { ItemInput } from "@/lib/hermes/parse";
 import { publishLiveEvent } from "@/lib/live/publish";
 import type { ChecklistItemDto, HermesWriteResult } from "@/types/dashboard-contracts";
@@ -67,10 +68,14 @@ interface Outcome {
   clearedIds: string[];
 }
 
-/** Idempotent create/update of a checklist item (PUT /api/hermes/cards/:key/items/:itemKey). */
+/**
+ * Idempotent create/update of a checklist item (PUT /api/hermes/cards/:key/items/:itemKey).
+ * Card and item may each be a key or an id. By key a missing item is created; by id it is 404.
+ * An existing item named under another card moves to this card.
+ */
 export async function upsertItem(
-  cardKey: string,
-  itemKey: string,
+  cardRef: RowRef,
+  itemRef: RowRef,
   input: ItemInput,
   options: { actor?: Actor; now?: Date } = {},
 ): Promise<HermesWriteResult<ChecklistItemDto>> {
@@ -78,18 +83,22 @@ export async function upsertItem(
   const outcome = await retryOnUniqueViolation(async () => {
     try {
       return await prisma.$transaction(async (tx): Promise<Outcome> => {
-        const card = await tx.workCard.findUnique({ where: { externalKey: cardKey }, select: { id: true } });
-        if (!card) throw new HttpError("NOT_FOUND", `No card has key ${cardKey}; create it first with PUT /api/hermes/cards/:key`);
+        const card = await tx.workCard.findUnique({ where: refWhere(cardRef), select: { id: true } });
+        if (!card) {
+          const hint = cardRef.kind === "key" ? "; create it first with PUT /api/hermes/cards/:key" : "";
+          throw new HttpError("NOT_FOUND", `No card has ${describeRef(cardRef)}${hint}`);
+        }
 
-        const existing = await tx.checklistItem.findUnique({ where: { externalKey: itemKey } });
+        const existing = await tx.checklistItem.findUnique({ where: refWhere(itemRef) });
         if (!existing) {
+          if (itemRef.kind === "id") throw new HttpError("NOT_FOUND", `No item has ${describeRef(itemRef)}`);
           const done = input.done ?? false;
           const isCurrent = input.isCurrent ?? false;
           const clearedIds = isCurrent ? await clearCurrent(tx, card.id, null) : [];
           const row = await tx.checklistItem.create({
             data: {
               cardId: card.id,
-              externalKey: itemKey,
+              externalKey: itemRef.key,
               title: input.title,
               issueNumber: input.issueNumber ?? null,
               sourceUrl: input.sourceUrl ?? null,
@@ -129,7 +138,7 @@ export async function upsertItem(
       });
     } catch (error) {
       if (!(error instanceof VersionConflict)) throw error;
-      const current = await prisma.checklistItem.findUniqueOrThrow({ where: { externalKey: itemKey }, include: itemInclude(now) });
+      const current = await prisma.checklistItem.findUniqueOrThrow({ where: refWhere(itemRef), include: itemInclude(now) });
       throw conflictError("item", new VersionConflict(error.reason, error.fields, current.version, error.sentVersion), toChecklistItemDto(current));
     }
   });
