@@ -8,9 +8,12 @@ const SOURCES = [
 
 export function SourceLegend() {
   return (
-    <ul aria-label="Source colors" className="flex flex-wrap gap-x-5 gap-y-2 font-mono text-xs text-text-muted">
+    <ul
+      aria-label="Source colors"
+      className="m-0 flex list-none flex-wrap gap-3.5 border border-ink-light bg-[rgba(14,26,31,0.6)] px-3.5 py-2.5 font-mono text-[12px] leading-normal text-text"
+    >
       {SOURCES.map((source) => (
-        <li key={source.name} className="flex items-center gap-2">
+        <li key={source.name} className="flex items-center gap-1.5">
           <span aria-hidden="true" className={`size-2 ${source.color}`} />
           {source.name}
         </li>

@@ -107,3 +107,333 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------- Shared components (src/components/ui) ----------
+   Surfaces, hard shadows and bubble tails that utilities can't express cleanly.
+   Values from for-claude/docs/02-DESIGN.md and design/reference/Layout.dc.html. */
+@layer components {
+  .glass-panel {
+    background: rgba(14, 26, 31, 0.5);
+    backdrop-filter: blur(20px) saturate(150%);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
+    border: 1px solid var(--ink-light);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.45),
+      0 30px 60px rgba(4, 10, 12, 0.5);
+  }
+
+  .glass-panel--broken {
+    background: rgba(240, 179, 90, 0.12);
+    border-color: var(--amber);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.3),
+      0 30px 60px rgba(4, 10, 12, 0.5);
+  }
+
+  .inner-card {
+    background: rgba(8, 18, 22, 0.35);
+    border: 1px solid rgba(216, 226, 220, 0.35);
+    transition:
+      background 0.3s ease,
+      border-color 0.3s ease;
+  }
+
+  .inner-card[data-accent] {
+    background: rgba(8, 18, 22, 0.42);
+    border-left: 3px solid var(--card-accent);
+  }
+
+  .inner-card[data-open] {
+    background: rgba(8, 18, 22, 0.62);
+    border-color: var(--ink-light);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 18px;
+    border: 1px solid var(--ink-light);
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.2;
+    text-align: center;
+    cursor: pointer;
+  }
+
+  .btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .btn--primary {
+    background: var(--lilac);
+    color: var(--on-lilac);
+    font-weight: 600;
+    box-shadow: 4px 4px 0 var(--ink-light);
+  }
+
+  .btn--secondary {
+    background: rgba(14, 26, 31, 0.85);
+    color: var(--text-strong);
+    box-shadow: 4px 4px 0 rgba(216, 226, 220, 0.55);
+  }
+
+  .btn--alert {
+    padding: 0 14px;
+    font-size: 13px;
+    background: rgba(14, 26, 31, 0.85);
+    color: var(--amber);
+    border-color: var(--amber);
+    box-shadow: 3px 3px 0 var(--amber);
+  }
+
+  .btn--ghost {
+    padding: 0 12px;
+    font-size: 13px;
+    background: transparent;
+    color: var(--lilac-text);
+    border-color: rgba(216, 226, 220, 0.5);
+  }
+
+  .btn--icon {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    background: rgba(14, 26, 31, 0.7);
+    color: var(--text-strong);
+    box-shadow: 3px 3px 0 rgba(216, 226, 220, 0.55);
+  }
+
+  .btn--sm {
+    padding: 0 14px;
+    font-size: 13px;
+  }
+
+  .btn--sm.btn--primary {
+    box-shadow: 3px 3px 0 var(--ink-light);
+  }
+
+  .btn--sm.btn--secondary {
+    box-shadow: 3px 3px 0 rgba(216, 226, 220, 0.55);
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border: 1px solid;
+    font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: nowrap;
+  }
+
+  .chip--in-progress {
+    color: var(--lilac-text);
+    background: rgba(156, 143, 208, 0.16);
+    border-color: var(--lilac);
+  }
+
+  .chip--open {
+    color: var(--text-strong);
+    border-color: var(--ink-light);
+  }
+
+  .chip--neutral {
+    color: var(--text-muted);
+    border-color: rgba(216, 226, 220, 0.4);
+  }
+
+  .segmented {
+    display: flex;
+  }
+
+  .segmented__option {
+    position: relative;
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--ink-light);
+    background: transparent;
+    color: var(--text);
+    font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .segmented__option + .segmented__option {
+    border-left: 0;
+  }
+
+  .segmented__option[aria-pressed="true"] {
+    background: var(--ink-light);
+    color: var(--pond);
+  }
+
+  .segmented__option:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  /* The design asks for 36px buttons; this keeps the hit area at 44px without changing the look. */
+  .segmented__option::before {
+    content: "";
+    position: absolute;
+    inset: -4px 0;
+  }
+
+  .progress-segments {
+    display: grid;
+    gap: 4px;
+  }
+
+  .progress-segments > span {
+    height: 10px;
+    box-sizing: border-box;
+    border: 1px solid rgba(216, 226, 220, 0.4);
+    transition:
+      background 0.3s ease,
+      border-color 0.3s ease;
+  }
+
+  .progress-segments > span[data-done] {
+    background: var(--lilac);
+    border-color: var(--lilac);
+  }
+
+  .check-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-height: 48px;
+    color: var(--text-strong);
+    cursor: pointer;
+    transition:
+      color 0.25s ease,
+      opacity 0.25s ease;
+  }
+
+  .check-row[data-checked] {
+    color: var(--text-done);
+  }
+
+  .check-row > input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    flex-shrink: 0;
+    accent-color: var(--lilac);
+    cursor: pointer;
+  }
+
+  .check-row:has(> input:disabled) {
+    cursor: not-allowed;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .input {
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: 0 10px;
+    background: rgba(8, 18, 22, 0.8);
+    border: 1px solid var(--ink-light);
+    border-radius: 0;
+    color: var(--text-strong);
+    font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+    font-size: 15px;
+    letter-spacing: 0;
+    text-transform: none;
+    color-scheme: dark;
+  }
+
+  .input:disabled {
+    opacity: 0.55;
+  }
+
+  .input[aria-invalid="true"] {
+    border-color: var(--amber);
+  }
+
+  .bubble {
+    position: relative;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    border: 1px solid;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  .bubble--hermes {
+    padding: 16px;
+    background: rgba(12, 22, 27, 0.92);
+    border-color: var(--lilac);
+    box-shadow: 6px 6px 0 rgba(156, 143, 208, 0.45);
+  }
+
+  .bubble--seerr {
+    padding: 14px;
+    background: rgba(12, 22, 27, 0.94);
+    border-color: var(--reflection);
+    box-shadow: 6px 6px 0 rgba(232, 199, 122, 0.4);
+  }
+
+  .bubble__tail {
+    position: absolute;
+    top: -9px;
+    width: 16px;
+    height: 16px;
+    background: rgb(12, 22, 27);
+    border-left: 1px solid;
+    border-top: 1px solid;
+    transform: rotate(45deg);
+  }
+
+  .bubble--hermes > .bubble__tail {
+    border-color: var(--lilac);
+  }
+
+  .bubble--seerr > .bubble__tail {
+    border-color: var(--reflection);
+  }
+
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      rgba(216, 226, 220, 0.08) 0%,
+      rgba(216, 226, 220, 0.18) 50%,
+      rgba(216, 226, 220, 0.08) 100%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.6s linear infinite;
+  }
+}
+
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: rgba(216, 226, 220, 0.1);
+  }
+}
