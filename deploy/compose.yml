@@ -1,0 +1,78 @@
+# Homelab Daily stack for Komodo (or plain `docker compose up -d`).
+#
+# - postgres : bridged container, published on the host loopback only (127.0.0.1:5432).
+# - migrate  : same image as the app, applies prisma/migrations once, then exits.
+# - app      : Next.js on port 4849.
+# - worker   : background jobs (scripts/worker.ts), a separate container from the SAME image.
+#
+# app, worker and migrate use `network_mode: host`, so they reach Postgres on 127.0.0.1:5432 and
+# Hermes on 127.0.0.1:8642. All settings come from the stack's `.env` (see deploy/.env.example).
+# The `.env` must sit next to this file; in Komodo set the stack's Run Directory to `deploy`.
+
+x-app: &app
+  image: ${APP_IMAGE:-ghcr.io/OWNER/REPO:latest}
+  env_file: .env
+  network_mode: host
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-continuum}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Applies the committed migrations once PostgreSQL is healthy, then exits.
+  # Safe to run on every deploy: already-applied migrations are skipped.
+  migrate:
+    <<: *app
+    command: ["npx", "prisma", "migrate", "deploy"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app:
+    <<: *app
+    restart: unless-stopped
+    environment:
+      PORT: "4849"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      # busybox wget ships with the alpine image. Fails (non-2xx) when the database is unreachable.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:$${PORT}/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  worker:
+    <<: *app
+    command: ["npx", "tsx", "scripts/worker.ts"]
+    init: true
+    restart: unless-stopped
+    # On stop the worker lets the running job finish first.
+    stop_grace_period: 30s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  postgres-data:
