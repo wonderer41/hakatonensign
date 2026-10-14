@@ -12,6 +12,8 @@ const STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   AI_PROVIDER_ERROR: 502,
   AI_INVALID_RESPONSE: 502,
   AI_CONTEXT_EMPTY: 422,
+  HERMES_UNAVAILABLE: 502,
+  SEERR_UNAVAILABLE: 502,
 };
 
 // Throw from services or route handlers; withErrorHandling turns it into an

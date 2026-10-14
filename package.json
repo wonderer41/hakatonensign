@@ -8,12 +8,14 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/lib/ai/*.test.ts src/lib/time/*.test.ts src/lib/timeline/*.test.ts src/lib/integrations/google-calendar/*.test.ts",
+    "test": "tsx --test src/lib/ai/*.test.ts src/lib/time/*.test.ts src/lib/timeline/*.test.ts src/lib/integrations/google-calendar/*.test.ts src/lib/integrations/seerr/*.test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "google:auth": "tsx scripts/google-auth.ts",
-    "sync:calendar": "tsx scripts/sync-calendar.ts"
+    "sync:calendar": "tsx scripts/sync-calendar.ts",
+    "seerr:settings": "tsx scripts/seerr-settings.ts",
+    "seerr:pending": "tsx scripts/seerr-pending.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
