@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Homelab Daily: one image, three jobs (selected by the command, see deploy/compose.yml):
-#   app      (default CMD)                      next start
+#   app      (default CMD)                      node --import tsx scripts/server.ts  (next start + client allowlist)
 #   worker   npx tsx scripts/worker.ts          background jobs (TypeScript, run with tsx)
 #   migrate  npx prisma migrate deploy          applies prisma/migrations, then exits
 #
@@ -50,6 +50,7 @@ COPY prisma ./prisma
 USER node
 EXPOSE 4849
 
-# `next start` reads the port from $PORT. Run node directly (not through npm) so SIGTERM from
-# `docker stop` reaches the server and it shuts down cleanly.
-CMD ["node", "node_modules/next/dist/bin/next", "start"]
+# scripts/server.ts = `next start` plus the DASHBOARD_ALLOWED_CIDRS client allowlist (it checks the
+# TCP peer before Next sees the request). It reads the port from $PORT. Run node directly (not
+# through npm) so SIGTERM from `docker stop` reaches the server and it shuts down cleanly.
+CMD ["node", "--import", "tsx", "scripts/server.ts"]
