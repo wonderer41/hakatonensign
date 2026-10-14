@@ -54,6 +54,7 @@ function item(id: string, position: number, done: boolean, isCurrent = false): C
     createdAt: AT,
     updatedAt: AT,
     calendarEvents: [],
+    progress: [],
   };
 }
 

@@ -14,7 +14,9 @@ export const SEED_CALENDAR_ID = "seed";
 export async function getTimeline(date: string, now = new Date(), env: NodeJS.ProcessEnv = process.env): Promise<TimelineResponse> {
   const timeZone = dashboardTimeZone(env);
   const calendarId = env.GOOGLE_CALENDAR_ID?.trim();
-  const calendarIds = calendarId ? [calendarId, SEED_CALENDAR_ID] : [SEED_CALENDAR_ID];
+  // The demo seed (scripts/seed.ts) writes to its own calendar; it is only shown outside production.
+  const calendarIds = calendarId ? [calendarId] : [];
+  if (env.NODE_ENV !== "production") calendarIds.push(SEED_CALENDAR_ID);
 
   const { start, end } = dayBounds(date, timeZone);
   const [events, syncState] = await Promise.all([
