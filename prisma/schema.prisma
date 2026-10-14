@@ -331,11 +331,14 @@ model ItemProgress {
 
 /// Symbols shown on the stocks banner slide. Hermes or the user can replace the list at any time.
 model WatchlistSymbol {
-  symbol    String   @id @db.VarChar(16)
-  position  Int
-  addedBy   Actor    @default(user)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  symbol            String    @id @db.VarChar(16)
+  position          Int
+  addedBy           Actor     @default(user)
+  /// Cached 6-month change in percent, refreshed daily from Tiingo; the quote sync reads it.
+  sixMonthChangePct Float?
+  sixMonthAsOf      DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   @@index([position])
 }
