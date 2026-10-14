@@ -22,7 +22,9 @@ export interface SprintDto {
   startsOn: string; // YYYY-MM-DD
   endsOn: string; // YYYY-MM-DD
   status: SprintStatus;
-  daysLeft: number | null; // computed for active sprints
+  /** Local calendar days from today to endsOn (0 on the last day); null unless active. */
+  daysLeft: number | null;
+  version: number;
 }
 
 export interface ChecklistItemDto {
@@ -222,6 +224,8 @@ export interface AlertDto {
   detail: string | null;
   severity: AlertSeverity;
   openedAt: string;
+  /** Null while open; the Broken panel only lists open alerts. */
+  resolvedAt: string | null;
   scheduled: { calendarEventId: string; startsAt: string; endsAt: string } | null;
 }
 
@@ -282,7 +286,10 @@ export interface HermesUpsertCard {
   status?: CardStatus;
   position?: number;
   hermesSuggestion?: string | null;
+  /** Shallow-merged into the stored meta; a null value removes that key. */
   meta?: Record<string, unknown>;
+  /** The version Hermes last read. Needed to change an existing card unless force is set (D15). */
+  version?: number;
   /** Override user-edited fields (see docs/03-DATA-MODEL.md, "Who wins"). */
   force?: boolean;
 }
@@ -291,9 +298,12 @@ export interface HermesUpsertItem {
   title: string;
   issueNumber?: number | null;
   sourceUrl?: string | null;
+  /** User-owned: changing it on an existing item needs force (D15). */
   done?: boolean;
   isCurrent?: boolean;
   position?: number;
+  /** The version Hermes last read. Needed to change an existing item unless force is set (D15). */
+  version?: number;
   force?: boolean;
 }
 
@@ -302,7 +312,11 @@ export interface HermesUpsertSprint {
   goal?: string | null;
   startsOn: string;
   endsOn: string;
+  /** Setting "active" closes the previously active sprint (D8). */
   status?: SprintStatus;
+  /** The version Hermes last read. Needed to change an existing sprint unless force is set (D15). */
+  version?: number;
+  force?: boolean;
 }
 
 export interface HermesUpsertAlert {
@@ -310,10 +324,104 @@ export interface HermesUpsertAlert {
   title: string;
   detail?: string | null;
   severity?: AlertSeverity;
+  /** Shallow-merged into the stored meta; a null value removes that key. */
   meta?: Record<string, unknown>;
 }
 
 export interface HermesWriteResult<T> {
   data: T;
   created: boolean;
+}
+
+/** `details` of a 409 CONFLICT from a Hermes upsert: re-read, then retry with currentVersion or force. */
+export interface HermesConflictDetails<T> {
+  reason: "version_required" | "stale_version" | "done_is_user_owned";
+  /** Fields the request would have changed. */
+  fields: string[];
+  currentVersion: number;
+  data: T;
+}
+
+export interface HermesDailyMessage {
+  date: string; // YYYY-MM-DD
+  text: string;
+  author: Actor;
+}
+
+export interface HermesBannerResult {
+  kind: BannerKind;
+  capturedAt: string;
+  data: GmailSnapshot | OrphansSnapshot | ScanSnapshot | StocksSnapshot;
+}
+
+export interface HermesCalendarChangedResult {
+  calendarId: string;
+  changedDates: string[];
+  created: number;
+  updated: number;
+  cancelled: number;
+  unchanged: number;
+  syncedAt: string;
+}
+
+// GET /api/hermes/state — compact on purpose (Hermes reads it before every write).
+// Rows Gerardo created on the page have key: null; Hermes can see them but not address them.
+
+export interface HermesStateSprint {
+  key: string | null;
+  name: string;
+  goal: string | null;
+  startsOn: string;
+  endsOn: string;
+  status: SprintStatus;
+  daysLeft: number | null;
+  version: number;
+}
+
+export interface HermesStateItem {
+  key: string | null;
+  title: string;
+  issueNumber: number | null;
+  done: boolean;
+  isCurrent: boolean;
+  position: number;
+  version: number;
+}
+
+export interface HermesStateCard {
+  key: string | null;
+  title: string;
+  status: CardStatus;
+  sprintKey: string | null;
+  repoFullName: string | null;
+  milestoneTitle: string | null;
+  hermesSuggestion: string | null;
+  position: number;
+  progress: { done: number; total: number };
+  current: { itemKey: string | null; title: string; label: "now" | "next" } | null;
+  version: number;
+  items: HermesStateItem[];
+}
+
+export interface HermesStateAlert {
+  dedupeKey: string;
+  source: string;
+  title: string;
+  detail: string | null;
+  severity: AlertSeverity;
+  openedAt: string;
+}
+
+export interface HermesStateResponse {
+  generatedAt: string;
+  date: string; // today in DASHBOARD_TIME_ZONE
+  timeZone: string;
+  activeSprint: HermesStateSprint | null;
+  /** Planned and active sprints. */
+  sprints: HermesStateSprint[];
+  /** Every card that is not archived, ordered by position. */
+  cards: HermesStateCard[];
+  /** Open alerts only. */
+  alerts: HermesStateAlert[];
+  dailyMessage: HermesDailyMessage | null;
 }

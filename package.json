@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/lib/ai/*.test.ts src/lib/time/*.test.ts src/lib/timeline/*.test.ts src/lib/integrations/google-calendar/*.test.ts src/lib/integrations/stocks/*.test.ts",
+    "test": "tsx --test 'src/**/*.test.ts'",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
@@ -16,7 +16,8 @@
     "sync:calendar": "tsx scripts/sync-calendar.ts",
     "sync:stocks": "tsx scripts/sync-stocks.ts",
     "sync:stocks:history": "tsx scripts/sync-stocks-history.ts",
-    "stocks:watchlist": "tsx scripts/stocks-watchlist.ts"
+    "stocks:watchlist": "tsx scripts/stocks-watchlist.ts",
+    "hermes:smoke": "tsx scripts/hermes-smoke.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
