@@ -246,11 +246,21 @@ export interface SeerrDecisionRequest {
 
 export interface WaitingDto {
   gmailNeedsReply: number;
-  seerrPending: number;
+  /** Live count from Seerr; null when Seerr is unavailable or not configured (see TodayResponse.sources.seerr). */
+  seerrPending: number | null;
   orphans: { sonarr: number; radarr: number; sonarrUrl: string | null; radarrUrl: string | null };
 }
 
 // ---------- Whole page ----------
+
+/** Health of one integration, so its section can degrade on its own ("Calendar unavailable — last synced 10:42"). */
+export interface SourceStateDto {
+  ok: boolean;
+  /** Last successful sync (calendar) or live check (Seerr); null if none is known. */
+  lastSyncAt: string | null;
+  /** Plain one-line reason when ok is false; null when ok. */
+  error: string | null;
+}
 
 export interface TodayResponse {
   date: string;
@@ -260,6 +270,7 @@ export interface TodayResponse {
   timeline: TimelineResponse;
   workingOn: { activeSprint: SprintDto | null; cards: WorkCardDto[] };
   warnings: { alerts: AlertDto[]; waiting: WaitingDto };
+  sources: { calendar: SourceStateDto; seerr: SourceStateDto };
 }
 
 // ---------- Live stream (/api/stream, Server-Sent Events) ----------
