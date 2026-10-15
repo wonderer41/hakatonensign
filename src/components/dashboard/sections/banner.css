@@ -100,7 +100,18 @@
   }
 
   /* Phones: "as of" on its own line above the controls. */
+  /* Phones: every slide takes the tallest slide's height, so keep Gmail compact (two groups per
+     row) and let short slides sit at the top instead of floating mid-panel. */
   @media (max-width: 560px) {
+    .banner-gmail {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .banner__slide--message {
+      justify-content: flex-start;
+    }
+
     .banner__footer {
       grid-template-columns: minmax(0, 1fr);
       justify-items: end;
