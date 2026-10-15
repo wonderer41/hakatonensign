@@ -1,0 +1,514 @@
+/*
+ * Banner slider. Values from for-claude/design/reference/Layout.dc.html (the banner section) and
+ * for-claude/docs/02-DESIGN.md. Everything sits in the components layer, like src/app/globals.css,
+ * so Tailwind utilities on the same element still win. The statement below only pins the layer
+ * order in case this file is ever loaded before globals.css.
+ */
+@layer theme, base, components, utilities;
+
+@layer components {
+  /* ---------- Slider ---------- */
+
+  .banner__viewport {
+    overflow: hidden;
+  }
+
+  .banner__track {
+    display: flex;
+    transition: transform 600ms var(--ease-out-soft);
+  }
+
+  /* prefers-reduced-motion: the slide changes at once (the hook also stops autoplay). */
+  .banner__track[data-still] {
+    transition: none;
+  }
+
+  .banner__slide {
+    flex: 0 0 100%;
+    box-sizing: border-box;
+    min-width: 0;
+    container: banner-slide / inline-size;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 22px 28px 6px;
+  }
+
+  .banner__slide--message {
+    justify-content: center;
+    padding-top: 24px;
+  }
+
+  /* Without the footer (a single slide) the slide pads itself. */
+  .banner__viewport:last-child .banner__slide {
+    padding-bottom: 26px;
+  }
+
+  .banner__footer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 12px;
+    min-height: 48px;
+    padding: 0 8px 4px 28px;
+  }
+
+  .banner__asof {
+    margin: 0;
+    min-height: 18px;
+    font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+    font-size: 12px;
+    line-height: 18px;
+    color: var(--text-muted);
+  }
+
+  .banner__controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .banner__dots {
+    display: flex;
+  }
+
+  /* 44 x 44 hit area around the 10px square dot (mockup). */
+  .banner__dot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .banner__dot::before {
+    content: "";
+    width: 10px;
+    height: 10px;
+    box-sizing: border-box;
+    border: 1px solid rgba(216, 226, 220, 0.7);
+    background: transparent;
+  }
+
+  .banner__dot[aria-current="true"]::before {
+    background: var(--lilac);
+    border-color: var(--ink-light);
+  }
+
+  /* Phones: "as of" on its own line above the controls. */
+  @media (max-width: 560px) {
+    .banner__footer {
+      grid-template-columns: minmax(0, 1fr);
+      justify-items: end;
+      row-gap: 0;
+      padding-top: 4px;
+    }
+
+    .banner__asof {
+      justify-self: start;
+    }
+  }
+
+  .banner-empty {
+    margin: 0;
+    padding: 24px 28px;
+    font-size: 15px;
+    color: var(--text-muted);
+  }
+
+  /* ---------- Shared bits ---------- */
+
+  .banner-split-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 4px 12px;
+    flex-wrap: wrap;
+  }
+
+  .banner-meta {
+    margin: 0;
+    font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .banner-muted {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  /* ---------- 1 Daily message ---------- */
+
+  .banner-message {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .banner-message__text {
+    margin: 0;
+  }
+
+  .banner-message__text p {
+    margin: 0;
+    font-family: var(--font-cormorant), Georgia, serif;
+    font-style: italic;
+    font-weight: 600;
+    font-size: clamp(28px, 3.4vw, 40px);
+    line-height: 1.15;
+    color: var(--text-strong);
+    text-wrap: pretty;
+  }
+
+  .banner-message__author {
+    font-size: 14px;
+    color: var(--text-muted);
+  }
+
+  /* ---------- 2 Gmail ---------- */
+
+  .banner-gmail {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+    gap: 14px;
+  }
+
+  .banner-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    padding-top: 10px;
+    border-top: 3px solid var(--group-color);
+  }
+
+  .banner-group--reply {
+    --group-color: var(--lily-pink);
+  }
+
+  .banner-group--packages {
+    --group-color: var(--reflection);
+  }
+
+  .banner-group--payments {
+    --group-color: var(--green);
+  }
+
+  .banner-group--deleted {
+    --group-color: var(--text-done);
+  }
+
+  .banner-group__head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+
+  /* Lining figures: Cormorant's default old-style 0 reads as the letter O next to a label. */
+  .banner-group__count {
+    font-family: var(--font-cormorant), Georgia, serif;
+    font-variant-numeric: lining-nums;
+    font-weight: 600;
+    font-size: 44px;
+    line-height: 1;
+    color: var(--text-strong);
+  }
+
+  .banner-group__label {
+    font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text);
+  }
+
+  .banner-group__caption {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .banner-rows {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .banner-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(216, 226, 220, 0.2);
+  }
+
+  .banner-row__text {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    min-width: 0;
+  }
+
+  .banner-row__link {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .banner-row__link:hover .banner-row__main {
+    text-decoration: underline;
+  }
+
+  .banner-row__main {
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-strong);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .banner-row__sub {
+    overflow: hidden;
+    font-size: 13px;
+    color: var(--text-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .banner-row__tag {
+    flex-shrink: 0;
+    max-width: 60%;
+    font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+    font-size: 12px;
+    text-align: right;
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
+
+  /* ---------- 3 Orphans + daily scan ---------- */
+
+  .banner-infra {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px 32px;
+  }
+
+  .banner-orphans {
+    flex: 2 1 420px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .banner-orphans__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+    gap: 0 24px;
+    border-top: 1px solid var(--ink-light);
+  }
+
+  .banner-orphans__item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 9px 0;
+    border-bottom: 1px solid rgba(216, 226, 220, 0.2);
+  }
+
+  .banner-orphans__mark {
+    width: 6px;
+    height: 6px;
+    flex-shrink: 0;
+    background: var(--green);
+  }
+
+  .banner-orphans__name {
+    overflow: hidden;
+    font-size: 15px;
+    color: var(--text-strong);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .banner-scan {
+    flex: 1 1 260px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-left: 24px;
+    border-left: 1px solid rgba(216, 226, 220, 0.35);
+  }
+
+  /* The two columns have wrapped onto separate lines: divide them from above instead. */
+  @container banner-slide (max-width: 711px) {
+    .banner-scan {
+      padding-top: 18px;
+      padding-left: 0;
+      border-top: 1px solid rgba(216, 226, 220, 0.35);
+      border-left: 0;
+    }
+  }
+
+  .banner-scan__status {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+  }
+
+  .banner-scan__headline {
+    font-family: var(--font-cormorant), Georgia, serif;
+    font-variant-numeric: lining-nums;
+    font-weight: 600;
+    font-size: 44px;
+    line-height: 1;
+  }
+
+  .banner-scan__headline--issue {
+    color: var(--amber);
+  }
+
+  .banner-scan__headline--ok {
+    color: var(--green);
+  }
+
+  .banner-scan__count {
+    font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  .banner-scan__issues {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .banner-scan__issue {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 2px 10px;
+    padding: 8px 10px;
+    border: 1px solid rgba(240, 179, 90, 0.6);
+    background: rgba(240, 179, 90, 0.1);
+  }
+
+  .banner-scan__mark {
+    width: 8px;
+    height: 8px;
+    flex-shrink: 0;
+    background: var(--amber);
+  }
+
+  .banner-scan__container {
+    font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+    font-size: 14px;
+    color: var(--text-strong);
+    overflow-wrap: anywhere;
+  }
+
+  .banner-scan__summary {
+    font-size: 14px;
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
+
+  /* ---------- 4 Stocks ---------- */
+
+  .banner-stocks {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+    gap: 16px 20px;
+  }
+
+  .banner-stocks__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
+    align-self: start;
+  }
+
+  .banner-stocks__table th,
+  .banner-stocks__table td {
+    padding: 9px 0 9px 6px;
+    text-align: right;
+    font-weight: 400;
+    white-space: nowrap;
+    border-bottom: 1px solid rgba(216, 226, 220, 0.2);
+    vertical-align: baseline;
+  }
+
+  .banner-stocks__table thead th {
+    padding-top: 0;
+    padding-bottom: 6px;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    border-bottom-color: var(--ink-light);
+  }
+
+  /* Symbol takes the leftover width and truncates; the numbers keep their own width. */
+  .banner-stocks__table .banner-stocks__symbol {
+    width: 100%;
+    max-width: 0;
+    padding-left: 0;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+  }
+
+  .banner-stocks__table tbody th.banner-stocks__symbol {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-strong);
+  }
+
+  .banner-stocks__currency {
+    display: block;
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-muted);
+  }
+
+  /* Column widths from the mockup (68 / 72 / 72 px) plus the 6px gap in front of each. */
+  .banner-stocks__price {
+    min-width: 74px;
+    font-size: 14px;
+    color: var(--text-strong);
+  }
+
+  .banner-change {
+    min-width: 78px;
+    font-size: 13px;
+  }
+
+  .banner-change--up {
+    color: var(--stock-up);
+  }
+
+  .banner-change--down {
+    color: var(--stock-down);
+  }
+
+  .banner-change--flat {
+    color: var(--text);
+  }
+}
