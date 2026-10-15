@@ -1,0 +1,40 @@
+/* Working on — card open/close (for-claude/docs/02-DESIGN.md, "Motion"; the mockup's Working on markup).
+   prefers-reduced-motion is already cut to 1ms globally in globals.css. */
+
+/* Summary and checklist: grid-template-rows 0fr ↔ 1fr, 450ms. */
+.wo-reveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.45s var(--ease-out-soft);
+}
+
+.wo-reveal[data-expanded] {
+  grid-template-rows: 1fr;
+}
+
+.wo-reveal > div {
+  min-height: 0;
+  overflow: hidden;
+  /* Side room inside the clip for focus rings and the bubble's 6px hard shadow. */
+  margin-inline: -10px;
+  padding-inline: 10px;
+}
+
+/* Chevron turns 180° in 350ms. */
+.wo-chevron {
+  transition: transform 0.35s ease;
+}
+
+.wo-toggle[aria-expanded="true"] .wo-chevron {
+  transform: rotate(180deg);
+}
+
+/* Issue numbers are pink until the item is checked, then follow the row's #7E8C87 (250ms). */
+.wo-num {
+  color: var(--lily-pink);
+  transition: color 0.25s ease;
+}
+
+.check-row[data-checked] .wo-num {
+  color: inherit;
+}
