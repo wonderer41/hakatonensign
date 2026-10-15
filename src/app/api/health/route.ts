@@ -23,7 +23,7 @@ export async function GET(): Promise<Response> {
     return Response.json(body, { status: 503, headers: NO_STORE });
   }
   return Response.json(
-    { ok: true, db: true, status: "ok", service: "continuum", time: new Date().toISOString() },
+    { ok: true, db: true, status: "ok", service: "homelab-daily", time: new Date().toISOString() },
     { headers: NO_STORE },
   );
 }

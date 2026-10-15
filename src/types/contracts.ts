@@ -36,22 +36,6 @@ export interface WorkEvent {
   createdAt: string;
 }
 
-export interface ContextItem {
-  text: string;
-  evidenceEventIds: string[];
-}
-
-export interface ContextSummary {
-  projectId: string;
-  generatedAt: string;
-  completed: ContextItem[];
-  inProgress: ContextItem[];
-  blockers: ContextItem[];
-  nextSteps: ContextItem[];
-  activityCount: number;
-  mode: "rules" | "ai";
-}
-
 export interface ApiError {
   error: {
     code: string;
@@ -59,18 +43,6 @@ export interface ApiError {
     details?: unknown;
   };
 }
-
-export interface AiContextResponse {
-  answer: string;
-  whereWeLeftOff: string;
-  nextSteps: string[];
-  blockers: string[];
-  upcomingMeetings: string[];
-  evidenceEventIds: string[];
-  confidence: "high" | "medium" | "low";
-}
-
-export type AiMode = "catch_up" | "next_action" | "meeting_prep";
 
 export interface PaginatedEvents {
   data: WorkEvent[];
@@ -118,12 +90,6 @@ export interface CreateEventResponse {
   created: boolean;
 }
 
-export interface GitHubSyncRequest {
-  projectId: string;
-  owner: string;
-  repo: string;
-}
-
 export interface GitHubSyncResult {
   projectId: string;
   repository: string;
@@ -142,9 +108,5 @@ export type ApiErrorCode =
   | "RATE_LIMITED"
   | "INTERNAL_ERROR"
   | "UPSTREAM_ERROR"
-  | "AI_NOT_CONFIGURED"
-  | "AI_PROVIDER_ERROR"
-  | "AI_INVALID_RESPONSE"
-  | "AI_CONTEXT_EMPTY"
   | "HERMES_UNAVAILABLE"
   | "SEERR_UNAVAILABLE";

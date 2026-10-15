@@ -1,5 +1,5 @@
 {
-  "name": "continuum",
+  "name": "homelab-daily",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -27,12 +27,10 @@
     "browser:smoke": "tsx scripts/browser-smoke.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.133.0",
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
     "dotenv": "^17.2.3",
     "next": "16.4.0",
-    "openai": "^7.32.0",
     "pg": "^8.16.3",
     "prisma": "7.10.0",
     "react": "19.3.0",
