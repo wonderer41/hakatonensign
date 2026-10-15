@@ -14,7 +14,7 @@ export function gmailLine(count: number): string {
   return count === 1 ? "1 starred thread needs a reply" : `${count} starred threads need a reply`;
 }
 
-/** Seerr card: the count is "?" while Seerr can't be asked (01-PRODUCT-SPEC, "Source down"). */
+/** Seerr card: the count is "?" while Seerr can't be asked. */
 export function seerrSummary(count: number | null): string {
   if (count === 0) return "No requests waiting";
   if (count === null) return "? guest requests to approve";

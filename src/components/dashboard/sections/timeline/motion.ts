@@ -1,4 +1,4 @@
-// Timeline motion (02-DESIGN.md "Motion"): a slow continuous drift to the left, a pause at the end,
+// Timeline motion: a slow continuous drift to the left, a pause at the end,
 // an eased jump back to the start, and 600 ms eased jumps for Earlier / Later. Plain DOM + rAF, no React:
 // the section creates one AutoScroller per mounted track and calls it from event handlers.
 

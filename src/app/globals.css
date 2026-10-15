@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Design tokens — values from for-claude/docs/02-DESIGN.md. Copy exactly; no framework rounding. */
+/* Design tokens. Copy exactly; no framework rounding. */
 :root {
   color-scheme: dark;
 
@@ -109,8 +109,7 @@ body {
 }
 
 /* ---------- Shared components (src/components/ui) ----------
-   Surfaces, hard shadows and bubble tails that utilities can't express cleanly.
-   Values from for-claude/docs/02-DESIGN.md and design/reference/Layout.dc.html. */
+   Surfaces, hard shadows and bubble tails that utilities can't express cleanly. */
 @layer components {
   .glass-panel {
     background: rgba(14, 26, 31, 0.5);

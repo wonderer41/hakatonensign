@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useState, type FocusEvent, type KeyboardEvent, type PointerEvent } from "react";
 import { resolveActiveIndex, stepId } from "./carousel-state";
 
-/** 02-DESIGN.md, Motion: the banner advances every 7 s. */
+/** The banner advances every 7 s. */
 export const AUTOPLAY_MS = 7000;
 
 // Keyboard focus pauses the slider; a dot clicked with the mouse keeps focus but must not freeze it.

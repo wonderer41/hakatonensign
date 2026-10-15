@@ -2,7 +2,7 @@ import { Eyebrow } from "@/components/ui/typography";
 import type { StocksSnapshot } from "@/types/dashboard-contracts";
 import { chunk, formatChange, formatPrice, sameCurrency } from "./format";
 
-/** 4 columns of 3 rows (01-PRODUCT-SPEC, slide 4). */
+/** 4 columns of 3 rows. */
 const ROWS_PER_COLUMN = 3;
 const MAX_ROWS = 12;
 

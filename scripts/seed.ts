@@ -1,4 +1,4 @@
-// Demo data for the page, taken from the approved mockup (for-claude/design/reference/Layout.dc.html).
+// Demo data for the page, taken from the approved design mockup.
 // Usage: npm run db:seed            write or refresh the seed rows (dates are relative to today)
 //        npm run db:seed -- --clean remove only the seed rows
 //

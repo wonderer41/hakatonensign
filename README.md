@@ -150,8 +150,9 @@ scan), alerts, the daily message and the stock watchlist.
 1. Generate a token, for example with `openssl rand -hex 32`, and put it in `HERMES_DASHBOARD_TOKEN`.
 2. In Hermes's env file, set `HOMELAB_DAILY_TOKEN` to the same value and `HOMELAB_DAILY_URL` to where
    Hermes can reach the dashboard (for example `http://127.0.0.1:4849` when both run on the same host).
-3. Add [`for-claude/hermes/dashboard-skill.md`](for-claude/hermes/dashboard-skill.md) to Hermes as a
-   skill. It describes every route, how to address rows, and how to recover from errors.
+3. Install the [`homelab-daily`](skills/homelab-daily/SKILL.md) skill in Hermes (see
+   [Agent skills](#agent-skills)). It describes every route, how to address rows, and how to recover
+   from errors.
 4. Test against a running dev server: `npm run hermes:smoke`.
 
 ### Dashboard → Hermes (scheduling, not built yet)
@@ -169,6 +170,21 @@ connected. To get ready:
 
 The API server gives whoever holds the key Hermes's full tool access, terminal included. Keep it bound
 to loopback or a private Docker network, and never expose it through a proxy.
+
+## Agent skills
+
+[`skills/`](skills) holds the skills that teach an AI agent to work with the dashboard. Each skill is a
+folder with a `SKILL.md` in the [Agent Skills](https://agentskills.io) format, so the same files work
+in Hermes, Claude Code and other agents that read that format.
+
+| Skill | What it lets the agent do |
+|---|---|
+| [`homelab-daily`](skills/homelab-daily/SKILL.md) | Read the page's state and update cards, checklist items, sprints, push-progress notes, the banner snapshots (Gmail, orphans, scan), alerts, the daily message and the stock watchlist |
+
+To install a skill, copy its folder into the agent's skills folder: `~/.hermes/skills/` for Hermes,
+`~/.claude/skills/` for Claude Code. The agent also needs `HOMELAB_DAILY_URL` and
+`HOMELAB_DAILY_TOKEN` in its environment (see [Hermes → dashboard](#hermes--dashboard)), and it has to
+reach the dashboard on your network. An agent that runs in the cloud usually can't.
 
 ## Security
 
@@ -204,9 +220,6 @@ npm run build
 | `npm run db:migrate` | Creates and applies a new migration (never edit one that was already applied) |
 
 After `npx prisma generate`, restart `npm run dev`: it caches the generated client.
-
-The full specs, the data model, the API contract and the approved mockup are in
-[`for-claude/docs`](for-claude/docs) and [`for-claude/design`](for-claude/design).
 
 ## License
 

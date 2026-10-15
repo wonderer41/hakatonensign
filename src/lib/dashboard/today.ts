@@ -9,8 +9,8 @@ import type { BannerDto, BannerPayload, SourceStateDto, TimelineResponse, TodayR
 import { parseSnapshotPayload } from "./banner-payload";
 import { alertInclude, type AlertRow, cardInclude, type CardRow, dateOnly, toAlertDto, toDbDate, toSprintDto, toWorkCardDto } from "./dto";
 
-// GET /api/today: everything the page needs in one call (for-claude/docs/04-API.md, section A).
-// Each integration degrades on its own (01-PRODUCT-SPEC.md, "Global states"): a failing Seerr or
+// GET /api/today: everything the page needs in one call.
+// Each integration degrades on its own: a failing Seerr or
 // calendar sync shows up in `sources`, never as a 500.
 
 /** The Waiting panel's Seerr count is read live; the page must not wait longer than this for it. */

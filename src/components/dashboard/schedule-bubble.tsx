@@ -29,7 +29,7 @@ interface Message {
 
 /** Fallback check while a request is "checking", in case a schedule.updated event was missed. */
 const POLL_MS = 10_000;
-/** The server gives up after 120 s (docs/04-API.md, schedule worker); the bubble a little later. */
+/** The server gives up after 120 s; the bubble a little later. */
 const GIVE_UP_MS = 150_000;
 
 function minutesBetween(startsAt: string, endsAt: string): number {
@@ -37,7 +37,7 @@ function minutesBetween(startsAt: string, endsAt: string): number {
 }
 
 /**
- * The Hermes scheduling bubble (01-PRODUCT-SPEC.md): Hermes asks when to block time, Gerardo picks a
+ * The Hermes scheduling bubble: Hermes asks when to block time, Gerardo picks a
  * start and any length (1–720 min), and the reply comes back from POST /api/schedule — booked,
  * conflict (with a one-click `Use HH:MM`), or failed. Local checks run first. Esc or × closes it;
  * focus moves to the start field on open and back to the opener on close.

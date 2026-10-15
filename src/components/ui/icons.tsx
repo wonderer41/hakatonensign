@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-// Inline stroke icons on a 24 grid (02-DESIGN.md, "Icon button"): miter joins, square caps.
+// Inline stroke icons on a 24 grid: miter joins, square caps.
 // Always decorative: put the accessible name on the button or link, not on the icon.
 
 export interface IconProps {
@@ -47,7 +47,7 @@ export function ChevronRightIcon(props: IconProps) {
   );
 }
 
-/** Card toggle chevron; rotate it 180° when open (transition 350ms, see 02-DESIGN.md "Motion"). */
+/** Card toggle chevron; rotate it 180° when open (transition 350ms). */
 export function ChevronDownIcon(props: IconProps) {
   return (
     <Icon {...props}>
@@ -82,7 +82,7 @@ export function WarningIcon({ strokeWidth = 1.6, ...props }: IconProps) {
   );
 }
 
-/** Commit dot on a line (StyleTile). */
+/** Commit dot on a line. */
 export function CommitIcon({ strokeWidth = 1.6, ...props }: IconProps) {
   return (
     <Icon strokeWidth={strokeWidth} {...props}>

@@ -1,5 +1,4 @@
-/* Timeline section. Values from for-claude/design/reference/Layout.dc.html (section "Timeline") and
-   for-claude/docs/02-DESIGN.md. Not a glass panel: the cards sit straight on the painting.
+/* Timeline section. Not a glass panel: the cards sit straight on the painting.
    Unlayered on purpose (it loads after Tailwind's layers); don't mix conflicting utilities on these elements. */
 
 .tl {

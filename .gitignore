@@ -21,3 +21,8 @@ Thumbs.db
 
 # graphify knowledge graph (generated)
 graphify-out/
+
+# AI assistant files: kept locally, never published
+CLAUDE.md
+.claude/
+for-claude/

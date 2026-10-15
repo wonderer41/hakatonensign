@@ -2,7 +2,7 @@ import { withErrorHandling } from "@/lib/api/http";
 import { formatSseEvent, SSE_HEADERS, SSE_OPEN_COMMENT, SSE_PING_INTERVAL_MS } from "@/lib/live/sse";
 import { getLiveSubscriber } from "@/lib/live/subscribe";
 
-// Live updates (for-claude/docs/04-API.md, section C): one long-lived SSE response per open page.
+// Live updates: one long-lived SSE response per open page.
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 

@@ -1,4 +1,4 @@
-// Server-Sent Events framing for /api/stream (for-claude/docs/04-API.md, section C).
+// Server-Sent Events framing for /api/stream.
 
 export const SSE_PING_INTERVAL_MS = 25_000;
 

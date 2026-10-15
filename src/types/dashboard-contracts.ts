@@ -334,7 +334,7 @@ export interface HermesUpsertCard {
   meta?: Record<string, unknown>;
   /** The version Hermes last read. Needed to change an existing card unless force is set (D15). */
   version?: number;
-  /** Override user-edited fields (see docs/03-DATA-MODEL.md, "Who wins"). */
+  /** Override user-edited fields. */
   force?: boolean;
 }
 

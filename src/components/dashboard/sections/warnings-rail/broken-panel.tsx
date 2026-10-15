@@ -16,7 +16,7 @@ export function BrokenPanel({ alerts }: { alerts: AlertDto[] }) {
   // One scheduling bubble at a time across the panel. An alert that resolves while its bubble is
   // open simply stops rendering it.
   const [openId, setOpenId] = useState<string | null>(null);
-  // A past day is read-only (01-PRODUCT-SPEC, "Daily rollover"): no new blocks on it.
+  // A past day is read-only: no new blocks on it.
   const readOnly = date < localDateString(new Date(now), timeZone);
 
   return (

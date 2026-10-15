@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import { addDays, dayBounds, localDateString } from "@/lib/time/zone";
 
-// for-claude/docs/03-DATA-MODEL.md, "Retention".
+// How long each kind of row is kept.
 export const RETENTION_DAYS = {
   bannerSnapshot: 14,
   scheduleRequest: 30,

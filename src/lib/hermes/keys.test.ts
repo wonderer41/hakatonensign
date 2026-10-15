@@ -13,7 +13,7 @@ function valid(value: string, kind: Parameters<typeof parseKey>[1]): boolean {
   }
 }
 
-test("card keys follow docs/03-DATA-MODEL.md", () => {
+test("card keys follow the documented key formats", () => {
   assert.ok(valid("hermes:card:orphan-cleanup", "card"));
   assert.ok(valid("github:milestone:wonderer41/study-sessions:3", "card"));
   assert.ok(valid("github:repo:wonderer41/pomanor-mcp", "card"));

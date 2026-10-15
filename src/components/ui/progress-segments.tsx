@@ -8,7 +8,7 @@ export interface ProgressSegmentsProps {
   className?: string;
 }
 
-/** Grid of N equal segments, 10px tall, 4px gap (02-DESIGN.md, "Segmented progress"). */
+/** Grid of N equal segments, 10px tall, 4px gap. */
 export function ProgressSegments({ segments, label, className }: ProgressSegmentsProps) {
   if (segments.length === 0) return null;
   const done = segments.filter(Boolean).length;

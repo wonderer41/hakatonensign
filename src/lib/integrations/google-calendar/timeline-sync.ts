@@ -5,7 +5,7 @@ import { fetchGoogleCalendarWindow } from "./client";
 import { loadGoogleCalendarConfig } from "./config";
 import { toCalendarEventFields } from "./timeline-normalize";
 
-// Rolling window kept in the cache: yesterday through two weeks ahead (docs/04-API.md, section D).
+// Rolling window kept in the cache: yesterday through two weeks ahead.
 const WINDOW_PAST_DAYS = 1;
 const WINDOW_FUTURE_DAYS = 14;
 

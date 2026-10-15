@@ -1,4 +1,4 @@
-/* Working on — card open/close (for-claude/docs/02-DESIGN.md, "Motion"; the mockup's Working on markup).
+/* Working on — card open/close.
    prefers-reduced-motion is already cut to 1ms globally in globals.css. */
 
 /* Summary and checklist: grid-template-rows 0fr ↔ 1fr, 450ms. */

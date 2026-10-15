@@ -20,7 +20,7 @@ export interface GlassPanelProps extends ComponentPropsWithoutRef<"section"> {
 }
 
 /**
- * The glass surface from 02-DESIGN.md ("Surfaces"): banner, Working on, Waiting on you, Broken.
+ * The glass surface: banner, Working on, Waiting on you, Broken.
  * Give it an accessible name when it is a landmark: aria-label or aria-labelledby on a section/aside.
  */
 export function GlassPanel({ as: Tag = "section", tone = "glass", pad = "section", className, ...rest }: GlassPanelProps) {

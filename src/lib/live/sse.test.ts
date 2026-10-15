@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { formatSseEvent, SSE_HEADERS, SSE_OPEN_COMMENT } from "./sse";
 
-test("SSE messages use the exact framing from docs/04-API.md", () => {
+test("SSE messages use the exact framing the client expects", () => {
   assert.equal(formatSseEvent("change", { type: "card.upserted", cardId: "c1" }), 'event: change\ndata: {"type":"card.upserted","cardId":"c1"}\n\n');
   assert.equal(formatSseEvent("ping", {}), "event: ping\ndata: {}\n\n");
 });

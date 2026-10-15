@@ -1,6 +1,6 @@
 import { fieldPath, invalid } from "@/lib/api/validate";
 
-// Reordering (docs/03-DATA-MODEL.md, "Ordering"): positions are integers with gaps of 1000 and a
+// Reordering: positions are integers with gaps of 1000 and a
 // reorder rewrites them in one transaction. The page sends the ids in their new order; rows it
 // did not list (e.g. a card Hermes added after the page loaded) keep their relative order after them.
 

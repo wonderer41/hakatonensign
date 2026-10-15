@@ -23,7 +23,7 @@ export interface SeerrRowProps {
 
 /** One pending request: title (year), type · seasons · requester, Temp | Permanent, Approve / Decline. */
 export function SeerrRow({ request, outcome, onDecide }: SeerrRowProps) {
-  // Guests go to Temp unless Gerardo says otherwise (01-PRODUCT-SPEC).
+  // Guests go to Temp unless Gerardo says otherwise.
   const [library, setLibrary] = useState<SeerrChoice>("temp");
   const [busy, setBusy] = useState<SeerrDecision | null>(null);
   const [error, setError] = useState<string | null>(null);

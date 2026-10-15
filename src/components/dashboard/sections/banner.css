@@ -1,6 +1,5 @@
 /*
- * Banner slider. Values from for-claude/design/reference/Layout.dc.html (the banner section) and
- * for-claude/docs/02-DESIGN.md. Everything sits in the components layer, like src/app/globals.css,
+ * Banner slider. Everything sits in the components layer, like src/app/globals.css,
  * so Tailwind utilities on the same element still win. The statement below only pins the layer
  * order in case this file is ever loaded before globals.css.
  */

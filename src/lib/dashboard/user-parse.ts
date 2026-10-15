@@ -16,7 +16,7 @@ import {
 import { CARD_STATUSES, SPRINT_STATUSES } from "@/lib/hermes/parse";
 import type { CardStatus, SprintStatus } from "@/types/dashboard-contracts";
 
-// Strict parsers for the browser routes (for-claude/docs/04-API.md, section A). Same rules as
+// Strict parsers for the browser routes. Same rules as
 // the Hermes parsers: unknown fields are rejected by name (400 with details.field), string
 // limits match the @db.VarChar sizes, and on an update absent = keep, null = clear.
 

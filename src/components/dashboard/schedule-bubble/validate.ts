@@ -1,6 +1,6 @@
 import { clockFromMinutes, DAY_MINUTES, formatDuration, MAX_LENGTH, MIN_LENGTH, parseClock, parseLength } from "./format";
 
-// Checks the bubble runs before asking the server (01-PRODUCT-SPEC.md, "Hermes scheduling bubble").
+// Checks the bubble runs before asking the server.
 // The texts are Hermes's replies, word for word from the spec and the mockup.
 
 export const MESSAGES = {

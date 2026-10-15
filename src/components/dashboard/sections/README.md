@@ -43,7 +43,7 @@ Rules
 - `now` (ISO) ticks on every minute boundary; derive past/current/future from it, never from `Date.now()` in render
   (hydration + the React Compiler lint rules forbid impure render code).
 - All dates and clocks use `timeZone` (DASHBOARD_TIME_ZONE) via `src/lib/time/zone.ts` (`formatClock`, `localDateString`, …).
-- `isToday` is false for `?date=` in the past or future (past = read-only, future = editable, per 01-PRODUCT-SPEC).
+- `isToday` is false for `?date=` in the past or future (past = read-only, future = editable).
 - Source down: render `<SourceDown …>` inside your section and keep everything else working (calendar → Timeline,
   `sources.seerr` → the Seerr item of Waiting on you). Never blank the section.
 - Layout: the dashboard sets the outer column widths; your root fills its column. The mockup's Timeline is **not**

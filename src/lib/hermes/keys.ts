@@ -1,7 +1,7 @@
 import { invalid } from "@/lib/api/validate";
 
-// Stable keys Hermes (or a sync) chooses so repeated writes update instead of duplicating
-// (for-claude/docs/03-DATA-MODEL.md, "Idempotent upserts"). Max 200 chars = the VarChar size.
+// Stable keys Hermes (or a sync) chooses so repeated writes update instead of duplicating.
+// Max 200 chars = the VarChar size.
 // Cards, items and sprints Gerardo created on the page have no key; Hermes addresses those (and
 // any other card, item or sprint) by id instead: "id:<uuid>", the id it read from GET /api/hermes/state.
 

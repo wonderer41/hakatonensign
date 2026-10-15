@@ -12,7 +12,7 @@ export interface WarningsRailProps {
 
 /**
  * Warnings (1/3 column): the amber Broken panel (open alerts, "Block time" → Hermes scheduling
- * bubble) and Waiting on you (Gmail, Seerr approvals, orphan review). See 01-PRODUCT-SPEC, "Warnings".
+ * bubble) and Waiting on you (Gmail, Seerr approvals, orphan review).
  */
 export function WarningsRail({ alerts, waiting, sources }: WarningsRailProps) {
   return (

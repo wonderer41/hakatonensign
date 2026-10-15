@@ -5,8 +5,8 @@ import { serializeLiveEvent } from "./event";
 import { safeErrorMessage } from "./redact";
 
 /**
- * Every write that changes what the page shows calls this after its DB commit
- * (for-claude/docs/04-API.md, section C). It sends the event with Postgres NOTIFY so every
+ * Every write that changes what the page shows calls this after its DB commit.
+ * It sends the event with Postgres NOTIFY so every
  * app process (and therefore every open /api/stream) sees it, whichever process wrote.
  * Never throws: a lost live update must not fail the write that triggered it.
  */

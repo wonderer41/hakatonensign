@@ -28,7 +28,7 @@ interface IconButtonProps extends NativeButtonProps {
 
 export type ButtonProps = TextButtonProps | IconButtonProps;
 
-/** Real <button> with min-height 44px, sharp edges and the hard offset shadows from 02-DESIGN.md. */
+/** Real <button> with min-height 44px, sharp edges and the hard offset shadows. */
 export function Button({ variant = "primary", size = "md", type = "button", className, ...rest }: ButtonProps) {
   return <button type={type} className={cx("btn", `btn--${variant}`, size === "sm" && variant !== "icon" && "btn--sm", className)} {...rest} />;
 }

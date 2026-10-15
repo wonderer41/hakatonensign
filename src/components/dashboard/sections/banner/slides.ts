@@ -10,7 +10,7 @@ export const SLIDE_LABELS: Record<SlideId, string> = {
   stocks: "Stocks",
 };
 
-/** Slides that have data, in order. A slide with no data is skipped (01-PRODUCT-SPEC, Banner). */
+/** Slides that have data, in order. A slide with no data is skipped. */
 export function availableSlides(banner: BannerDto): SlideId[] {
   const slides: SlideId[] = [];
   if (banner.dailyMessage && banner.dailyMessage.text.trim() !== "") slides.push("message");

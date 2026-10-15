@@ -1,7 +1,7 @@
 # Shared UI primitives
 
 Plain React + Tailwind 4 on the tokens in `src/app/globals.css` (component CSS lives there under
-`@layer components`). Sharp edges everywhere; values come from `for-claude/docs/02-DESIGN.md`. Import each
+`@layer components`). Sharp edges everywhere. Import each
 file directly (no barrel), e.g. `import { Button } from "@/components/ui/button"`. Every component takes
 `className` for layout; utilities win over the component CSS.
 

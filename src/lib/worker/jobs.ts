@@ -33,7 +33,7 @@ function failedSummary(failed: { symbol: string }[]): string {
 }
 
 /**
- * Every job the worker container runs (for-claude/docs/04-API.md, section D). To add one, append
+ * Every job the worker container runs. To add one, append
  * a single entry. `run` returns a short summary (counts, never secrets) for the log line, and should publish the
  * LiveEvents for whatever it changed. Throwing marks the run failed; the job still runs next time.
  */
@@ -59,7 +59,7 @@ export const workerJobs: WorkerJob[] = [
     run: async ({ now, timeZone }) => formatRetentionResult(await runRetention(prisma, now, timeZone)),
   },
   {
-    // Waiting panel count (docs/04-API.md, section D). The first poll after a restart publishes too.
+    // Waiting panel count. The first poll after a restart publishes too.
     name: "seerr-poll",
     trigger: { everyMs: 2 * MINUTE },
     run: async () => {

@@ -25,7 +25,7 @@ const DEFAULT_TAIL = {
 } as const;
 
 /**
- * The chat / Seerr bubble (02-DESIGN.md, "Bubbles"): near-opaque glass, sharp corners, hard offset
+ * The chat / Seerr bubble: near-opaque glass, sharp corners, hard offset
  * shadow and a 16px square rotated 45° as the tail. Width and margins are the caller's
  * (the Hermes bubble is `ml-auto w-[min(480px,100%)]`, the Seerr one `mt-3`).
  */

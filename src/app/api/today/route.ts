@@ -2,7 +2,7 @@ import { HttpError, withErrorHandling } from "@/lib/api/http";
 import { getToday } from "@/lib/dashboard/today";
 import { dashboardTimeZone, isDateString, localDateString } from "@/lib/time/zone";
 
-// One call renders the page (for-claude/docs/04-API.md, section A). `date` defaults to today in DASHBOARD_TIME_ZONE.
+// One call renders the page. `date` defaults to today in DASHBOARD_TIME_ZONE.
 export const GET = withErrorHandling(async (request: Request) => {
   const param = new URL(request.url).searchParams.get("date");
   if (param !== null && !isDateString(param)) {

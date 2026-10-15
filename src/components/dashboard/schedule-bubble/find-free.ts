@@ -9,7 +9,7 @@ export interface BusyRange {
 
 /**
  * Next free slot of `durationMin` at or after `fromMin`, or null when none is left before midnight.
- * Same function as the mockup and docs/05-HERMES.md ("Use 20:30").
+ * Powers the conflict reply's "Use 20:30" button.
  */
 export function findFree(fromMin: number, durationMin: number, events: readonly BusyRange[]): number | null {
   let t = fromMin;

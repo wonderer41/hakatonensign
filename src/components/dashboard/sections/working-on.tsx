@@ -24,7 +24,7 @@ interface OpenBubble {
 }
 
 /**
- * Working on (01-PRODUCT-SPEC.md): the active sprint, then one card per tracked project. One card is
+ * Working on: the active sprint, then one card per tracked project. One card is
  * open at a time; opening another closes the first. Checkbox writes are optimistic (mutate + PATCH
  * with the item's version); scheduling goes through the shared ScheduleBubble.
  */

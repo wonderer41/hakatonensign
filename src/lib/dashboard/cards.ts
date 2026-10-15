@@ -10,7 +10,7 @@ import { cardInclude, toWorkCardDto } from "./dto";
 import { mergeMeta, sameJson } from "./json";
 import { findSprintIdByKey } from "./sprints";
 
-/** Positions are integers with gaps of 1000 (docs/03-DATA-MODEL.md, "Ordering"). */
+/** Positions are integers with gaps of 1000. */
 export const POSITION_GAP = 1000;
 
 export async function loadCardDto(id: string, now = new Date()): Promise<WorkCardDto> {

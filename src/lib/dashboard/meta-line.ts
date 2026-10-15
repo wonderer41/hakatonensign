@@ -44,7 +44,7 @@ function lastCommitText(commit: Date, now: Date, timeZone: string): string {
 }
 
 /**
- * The one-line meta shown on a collapsed Working-on card (for-claude/docs/01-PRODUCT-SPEC.md),
+ * The one-line meta shown on a collapsed Working-on card,
  * with times in the dashboard zone:
  *   `last commit 10:31 · 6 this week`        commit today
  *   `last commit Mon 10:31 · none this week`  commit in the last 6 days

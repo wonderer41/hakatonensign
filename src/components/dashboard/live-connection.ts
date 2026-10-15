@@ -1,7 +1,7 @@
 import type { LiveEvent } from "@/types/dashboard-contracts";
 import { backoffDelay, realTimers, type Timers } from "./timing";
 
-// Client side of GET /api/stream (for-claude/docs/04-API.md, section C).
+// Client side of GET /api/stream.
 // Events are `event: change` with a LiveEvent as data, and `event: ping` every 25 s.
 
 /** The part of the browser's EventSource this file uses (a fake in tests). */

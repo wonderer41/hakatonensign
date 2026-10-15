@@ -32,7 +32,7 @@ function timeline(events: TimelineEventDto[], allDay: TimelineEventDto[] = []): 
   return { date: DATE, timeZone: ZONE, now: at("00:00"), allDay, events, gaps: [], lastSyncAt: null, syncError: null };
 }
 
-// The mockup's day (Layout.dc.html), with the clock at 11:45.
+// The mockup's day, with the clock at 11:45.
 const MOCKUP = [
   event("class", "08:00", "09:15"),
   event("event", "10:00", "11:00"),

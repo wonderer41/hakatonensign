@@ -26,7 +26,7 @@ export interface BuildTimelineInput {
   syncError: string | null;
 }
 
-/** Free-time colors: under 30m green, 30–60m gold, over 60m pink (docs/01-PRODUCT-SPEC.md). */
+/** Free-time colors: under 30m green, 30–60m gold, over 60m pink. */
 export function gapTone(minutes: number): GapTone {
   if (minutes < 0) return "overlap";
   if (minutes < 30) return "short";
