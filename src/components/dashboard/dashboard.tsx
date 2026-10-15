@@ -43,6 +43,12 @@ export function Dashboard({ initial, pinned }: DashboardProps) {
   const [refreshFailed, setRefreshFailed] = useState(false);
   const feedRef = useRef<TodayFeed | null>(null);
   const listenersRef = useRef(new Set<LiveListener>());
+  // Server clock minus this browser's clock, so a fast laptop clock never rolls the page to a day
+  // the server will immediately roll back.
+  const serverOffsetRef = useRef(0);
+  useEffect(() => {
+    serverOffsetRef.current = Date.parse(initial.generatedAt) - Date.now();
+  }, [initial.generatedAt]);
 
   useEffect(() => {
     const feed = new TodayFeed({
@@ -134,7 +140,7 @@ export function Dashboard({ initial, pinned }: DashboardProps) {
   // Minute clock, aligned to the minute boundary. Each tick also catches a missed midnight
   // (the laptop slept through it); a tab coming back into view ticks at once.
   const onTick = useEffectEvent(() => {
-    const at = new Date();
+    const at = new Date(Date.now() + serverOffsetRef.current);
     setNow(at.toISOString());
     rollTo(localDateString(at, timeZone));
   });
@@ -160,7 +166,7 @@ export function Dashboard({ initial, pinned }: DashboardProps) {
   // Fallback for day.rollover: our own timer at local midnight in the dashboard zone.
   useEffect(() => {
     if (view.pinned) return;
-    const timer = setTimeout(() => onTick(), msUntilNextLocalMidnight(Date.now(), timeZone) + 1_000);
+    const timer = setTimeout(() => onTick(), msUntilNextLocalMidnight(Date.now() + serverOffsetRef.current, timeZone) + 1_000);
     return () => clearTimeout(timer);
   }, [view.date, view.pinned, timeZone]);
 

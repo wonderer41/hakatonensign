@@ -217,7 +217,8 @@ export interface StocksSnapshot {
     price: number;
     currency: string;
     dayChangePct: number;
-    sixMonthChangePct: number;
+    /** Null until Tiingo has history for the symbol (new listing, uncovered ticker). */
+    sixMonthChangePct: number | null;
   }[];
 }
 

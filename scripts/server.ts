@@ -84,7 +84,12 @@ async function main(): Promise<void> {
   // Registered before Next adds its own "upgrade" listener (on the first request), so refused
   // peers are answered and the socket closed here; allowed upgrades are left to Next.
   server.on("upgrade", (req, socket: Duplex) => {
-    if (!gate(req.socket.remoteAddress)) socket.end(Buffer.concat([Buffer.from(refusalHead), refusalBody]));
+    if (!gate(req.socket.remoteAddress)) {
+      socket.end(Buffer.concat([Buffer.from(refusalHead), refusalBody]));
+      return;
+    }
+    // Nothing upgrades in production (HMR is dev-only): answer instead of leaving the socket open.
+    socket.end("HTTP/1.1 426 Upgrade Required\r\nconnection: close\r\ncontent-length: 0\r\n\r\n");
   });
 
   let stopping = false;

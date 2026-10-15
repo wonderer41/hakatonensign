@@ -171,6 +171,22 @@ export function assembleToday(parts: TodayParts): TodayResponse {
 }
 
 /** GET /api/today?date=YYYY-MM-DD. `date` is validated by the route. */
+const BANNER_KINDS = ["gmail", "orphans", "scan", "stocks"] as const;
+
+/** Newest snapshot per kind. One indexed findFirst per kind: Prisma's `distinct` filters in memory. */
+async function latestSnapshots(): Promise<SnapshotRow[]> {
+  const rows = await Promise.all(
+    BANNER_KINDS.map((kind) =>
+      prisma.bannerSnapshot.findFirst({
+        where: { kind },
+        orderBy: [{ capturedAt: "desc" }, { createdAt: "desc" }],
+        select: { kind: true, payload: true, capturedAt: true },
+      }),
+    ),
+  );
+  return rows.filter((row): row is SnapshotRow => row !== null);
+}
+
 export async function getToday(date: string, now = new Date(), env: NodeJS.ProcessEnv = process.env): Promise<TodayResponse> {
   const timeZone = dashboardTimeZone(env);
   const [timeline, activeSprint, cards, alerts, snapshots, dailyMessage, seerr] = await Promise.all([
@@ -183,11 +199,7 @@ export async function getToday(date: string, now = new Date(), env: NodeJS.Proce
       include: cardInclude(now),
     }),
     prisma.alert.findMany({ where: { resolvedAt: null }, orderBy: { openedAt: "asc" }, include: alertInclude(now) }),
-    prisma.bannerSnapshot.findMany({
-      distinct: ["kind"],
-      orderBy: [{ kind: "asc" }, { capturedAt: "desc" }, { createdAt: "desc" }],
-      select: { kind: true, payload: true, capturedAt: true },
-    }),
+    latestSnapshots(),
     prisma.dailyMessage.findUnique({ where: { date: toDbDate(date) } }),
     liveSeerrPending(now, env),
   ]);

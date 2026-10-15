@@ -46,11 +46,14 @@ type RetentionDb = Pick<PrismaClient, "bannerSnapshot" | "scheduleRequest" | "ca
  */
 export async function runRetention(db: RetentionDb, now: Date, timeZone: string): Promise<RetentionResult> {
   const cutoffs = retentionCutoffs(now, timeZone);
-  const latestPerKind = await db.bannerSnapshot.findMany({
-    distinct: ["kind"],
-    orderBy: [{ kind: "asc" }, { capturedAt: "desc" }, { createdAt: "desc" }],
-    select: { id: true },
-  });
+  // One indexed findFirst per kind: Prisma's `distinct` would read the whole table.
+  const latestPerKind = (
+    await Promise.all(
+      (["gmail", "orphans", "scan", "stocks"] as const).map((kind) =>
+        db.bannerSnapshot.findFirst({ where: { kind }, orderBy: [{ capturedAt: "desc" }, { createdAt: "desc" }], select: { id: true } }),
+      ),
+    )
+  ).filter((row): row is { id: string } => row !== null);
 
   const [bannerSnapshots, scheduleRequests, calendarEvents, resolvedAlerts] = await db.$transaction([
     db.bannerSnapshot.deleteMany({

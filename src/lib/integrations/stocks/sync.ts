@@ -32,6 +32,11 @@ function describe(error: unknown): string {
   return error instanceof Error ? error.message : "unknown error";
 }
 
+/** True when Tiingo was asked about this symbol less than HISTORY_MAX_AGE_MS ago (success or not). */
+function recentlyAsked(asOf: Date | null, now: Date): boolean {
+  return asOf !== null && now.getTime() - asOf.getTime() < HISTORY_MAX_AGE_MS;
+}
+
 /** Fetches Tiingo history for one symbol, computes the 6M change and caches it on the watchlist row. */
 async function refreshSixMonth(symbol: string, now: Date, config: StocksApiConfig): Promise<number> {
   const today = localDateString(now, dashboardTimeZone());
@@ -60,10 +65,16 @@ export async function syncStockQuotes(now: Date): Promise<QuoteSyncResult> {
     try {
       const quote = await fetchFinnhubQuote(entry.symbol, finnhub);
       let sixMonth = entry.sixMonthChangePct;
-      if (sixMonth === null) {
-        // New symbol: fetch history now so the snapshot is complete.
+      if (sixMonth === null && !recentlyAsked(entry.sixMonthAsOf, now)) {
+        // New symbol: fetch history now so the snapshot is complete. If Tiingo has none, keep the
+        // quote (6M shows "—") and remember the attempt so the next try waits for the daily job.
         tiingo ??= loadTiingoConfig();
-        sixMonth = await refreshSixMonth(entry.symbol, now, tiingo);
+        try {
+          sixMonth = await refreshSixMonth(entry.symbol, now, tiingo);
+        } catch (error) {
+          await prisma.watchlistSymbol.update({ where: { symbol: entry.symbol }, data: { sixMonthAsOf: now } });
+          console.warn(`[stocks] ${entry.symbol}: no 6-month history yet (${describe(error)})`);
+        }
       }
       rows.push(buildRow(entry.symbol, quote, sixMonth));
     } catch (error) {
@@ -99,8 +110,7 @@ export async function syncStockHistory(
   let tiingo: StocksApiConfig | null = null;
 
   for (const entry of watchlist) {
-    const fresh = entry.sixMonthAsOf && now.getTime() - entry.sixMonthAsOf.getTime() < HISTORY_MAX_AGE_MS;
-    if (fresh && !options.force) {
+    if (recentlyAsked(entry.sixMonthAsOf, now) && !options.force) {
       skipped.push(entry.symbol);
       continue;
     }

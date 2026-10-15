@@ -27,6 +27,8 @@ export interface LiveSubscribeOptions {
 interface Subscription {
   listener: LiveListener;
   onReconnect?: () => void;
+  /** Added while LISTEN was down (or not up yet): events until it comes up are missed. */
+  catchUp: boolean;
 }
 
 type State = "idle" | "connecting" | "listening" | "waiting" | "closed";
@@ -52,7 +54,7 @@ export class LiveSubscriber {
 
   /** Adds a listener and connects on first use. Returns the unsubscribe function. */
   subscribe(listener: LiveListener, options: LiveSubscribeOptions = {}): () => void {
-    const subscription: Subscription = { listener, onReconnect: options.onReconnect };
+    const subscription: Subscription = { listener, onReconnect: options.onReconnect, catchUp: this.state !== "listening" };
     this.subscriptions.add(subscription);
     if (this.state === "idle") void this.connect();
     return () => {
@@ -104,13 +106,13 @@ export class LiveSubscriber {
     const reconnected = this.everListened;
     this.everListened = true;
     console.log(`[live] ${reconnected ? "reconnected, listening" : "listening"} on ${LIVE_CHANNEL}`);
-    if (reconnected) {
-      for (const subscription of [...this.subscriptions]) {
-        try {
-          subscription.onReconnect?.();
-        } catch (error) {
-          console.error(`[live] reconnect handler failed: ${safeErrorMessage(error)}`);
-        }
+    for (const subscription of [...this.subscriptions]) {
+      if (!reconnected && !subscription.catchUp) continue;
+      subscription.catchUp = false;
+      try {
+        subscription.onReconnect?.();
+      } catch (error) {
+        console.error(`[live] reconnect handler failed: ${safeErrorMessage(error)}`);
       }
     }
   }

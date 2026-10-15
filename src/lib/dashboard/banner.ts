@@ -20,25 +20,23 @@ export async function insertBannerSnapshot(
 ): Promise<HermesWriteResult<HermesBannerResult>> {
   const payload = parseSnapshotPayload(kind, rawPayload);
 
-  const existing = await prisma.bannerSnapshot.findFirst({
-    where: { kind, capturedAt },
-    orderBy: { createdAt: "desc" },
-    select: { id: true, payload: true },
+  // (kind, capturedAt) is unique: a retried PUT racing the first one loses the create and takes the update path.
+  const outcome = await retryOnUniqueViolation(async () => {
+    const existing = await prisma.bannerSnapshot.findUnique({
+      where: { kind_capturedAt: { kind, capturedAt } },
+      select: { id: true, payload: true },
+    });
+    if (!existing) {
+      await prisma.bannerSnapshot.create({ data: { kind, payload: payload as unknown as Prisma.InputJsonObject, capturedAt, pushedBy } });
+      return { created: true, changed: true };
+    }
+    if (sameJson(existing.payload, payload)) return { created: false, changed: false };
+    await prisma.bannerSnapshot.update({ where: { id: existing.id }, data: { payload: payload as unknown as Prisma.InputJsonObject, pushedBy } });
+    return { created: false, changed: true };
   });
 
-  let created = false;
-  let changed = false;
-  if (!existing) {
-    await prisma.bannerSnapshot.create({ data: { kind, payload: payload as unknown as Prisma.InputJsonObject, capturedAt, pushedBy } });
-    created = true;
-    changed = true;
-  } else if (!sameJson(existing.payload, payload)) {
-    await prisma.bannerSnapshot.update({ where: { id: existing.id }, data: { payload: payload as unknown as Prisma.InputJsonObject, pushedBy } });
-    changed = true;
-  }
-
-  if (changed) await publishLiveEvent({ type: "banner.updated", kind });
-  return { data: { kind, capturedAt: capturedAt.toISOString(), data: payload }, created };
+  if (outcome.changed) await publishLiveEvent({ type: "banner.updated", kind });
+  return { data: { kind, capturedAt: capturedAt.toISOString(), data: payload }, created: outcome.created };
 }
 
 /** Writes the banner's daily message for a local date (PUT /api/hermes/daily-message/:date, D13). */

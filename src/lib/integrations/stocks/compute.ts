@@ -32,7 +32,7 @@ export function sixMonthChangePct(prices: DailyPrice[], today: string): number |
 export function buildRow(
   symbol: string,
   quote: { price: number; dayChangePct: number },
-  sixMonthChangePct: number,
+  sixMonthChangePct: number | null,
 ): StockRow {
   return {
     symbol,
@@ -55,8 +55,9 @@ export function buildSnapshot(order: string[], rows: StockRow[], now: Date): Sto
   };
 }
 
-/** "▲ +1.2%" / "▼ −3.4%" as the banner shows it. */
-export function formatChange(pct: number): string {
+/** "▲ +1.2%" / "▼ −3.4%" as the banner shows it; "—" when there is no value yet. */
+export function formatChange(pct: number | null): string {
+  if (pct === null) return "—";
   const rounded = Math.round(Math.abs(pct) * 10) / 10;
   if (pct >= 0 || rounded === 0) return `▲ +${rounded.toFixed(1)}%`;
   return `▼ −${rounded.toFixed(1)}%`;

@@ -6,7 +6,15 @@ import { chunk, formatChange, formatPrice, sameCurrency } from "./format";
 const ROWS_PER_COLUMN = 3;
 const MAX_ROWS = 12;
 
-function Change({ pct }: { pct: number }) {
+function Change({ pct }: { pct: number | null }) {
+  if (pct === null) {
+    return (
+      <td className="banner-change banner-change--flat">
+        <span aria-hidden="true">—</span>
+        <span className="sr-only">no data yet</span>
+      </td>
+    );
+  }
   const change = formatChange(pct);
   return (
     <td className={`banner-change banner-change--${change.direction}`}>

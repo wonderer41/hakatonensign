@@ -10,6 +10,7 @@ export const MESSAGES = {
   pastDay: "That day is over. Pick a time today or later.",
   pastMidnight: "That runs past midnight. Try an earlier start.",
   noAnswer: "Hermes didn't answer. Try again.",
+  notConnected: "Scheduling isn't connected yet — it arrives with the Hermes step.",
   checking: "Hermes is checking your calendar…",
 } as const;
 

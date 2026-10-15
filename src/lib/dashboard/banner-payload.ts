@@ -107,7 +107,7 @@ function parseStocks(o: Record<string, unknown>): StocksSnapshot {
       price,
       currency,
       dayChangePct: finiteNumber(row.dayChangePct, fieldPath(field, "dayChangePct")),
-      sixMonthChangePct: finiteNumber(row.sixMonthChangePct, fieldPath(field, "sixMonthChangePct")),
+      sixMonthChangePct: row.sixMonthChangePct === null ? null : finiteNumber(row.sixMonthChangePct, fieldPath(field, "sixMonthChangePct")),
     };
   });
   if (rows.length === 0) invalid("rows", "must have at least one row");

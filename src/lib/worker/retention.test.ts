@@ -33,9 +33,10 @@ test("runRetention deletes by the right fields and keeps the newest snapshot per
   const db = {
     bannerSnapshot: {
       ...deleter("bannerSnapshot", 3),
-      findMany: async (args: unknown) => {
-        calls.latest = args;
-        return [{ id: "keep-gmail" }, { id: "keep-stocks" }];
+      // One findFirst per kind; only gmail and stocks have rows in this fixture.
+      findFirst: async (args: { where: { kind: string } }) => {
+        calls[`latest-${args.where.kind}`] = args;
+        return args.where.kind === "gmail" ? { id: "keep-gmail" } : args.where.kind === "stocks" ? { id: "keep-stocks" } : null;
       },
     },
     scheduleRequest: deleter("scheduleRequest", 2),

@@ -275,6 +275,8 @@ model BannerSnapshot {
   pushedBy   Actor      @default(hermes)
   createdAt  DateTime   @default(now())
 
+  /// One row per capture, so a retried PUT /api/hermes/banner/:kind can never duplicate it.
+  @@unique([kind, capturedAt])
   @@index([kind, capturedAt])
 }
 

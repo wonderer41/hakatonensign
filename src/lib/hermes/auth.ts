@@ -53,17 +53,15 @@ const globalForHermes = globalThis as unknown as { hermesRateLimiter?: RateLimit
 const limiter = (globalForHermes.hermesRateLimiter ??= createRateLimiter(HERMES_RATE_LIMIT.limit, HERMES_RATE_LIMIT.windowMs));
 
 /**
- * Wraps a /api/hermes/* route handler: rate limit (every request counts), bearer check, then
- * the handler, all inside withErrorHandling so errors use the shared envelope.
+ * Wraps a /api/hermes/* route handler: bearer check, then the rate limit, then the handler, all
+ * inside withErrorHandling so errors use the shared envelope. Only authenticated requests spend
+ * the budget, so another client on the network cannot starve Hermes with tokenless calls.
  */
 export function withHermesAuth<Args extends [Request, ...unknown[]]>(
   handler: (...args: Args) => Promise<Response>,
 ): (...args: Args) => Promise<Response> {
-  const guarded = withErrorHandling(async (...args: Args) => {
+  return withErrorHandling(async (...args: Args) => {
     assertHermesToken(args[0].headers.get("authorization"));
-    return handler(...args);
-  });
-  return async (...args) => {
     const retryAfter = limiter.take();
     if (retryAfter > 0) {
       const response = errorResponse("RATE_LIMITED", `Too many requests; limit is ${HERMES_RATE_LIMIT.limit} per minute`, {
@@ -72,6 +70,6 @@ export function withHermesAuth<Args extends [Request, ...unknown[]]>(
       response.headers.set("Retry-After", String(retryAfter));
       return response;
     }
-    return guarded(...args);
-  };
+    return handler(...args);
+  });
 }

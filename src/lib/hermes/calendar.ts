@@ -1,7 +1,7 @@
 import { HttpError } from "@/lib/api/http";
 import { loadGoogleCalendarConfig } from "@/lib/integrations/google-calendar/config";
-import { syncCalendarTimeline, type CalendarSyncResult } from "@/lib/integrations/google-calendar/timeline-sync";
-import { publishLiveEvent } from "@/lib/live/publish";
+import { runCalendarSync } from "@/lib/worker/jobs";
+import type { CalendarJobResult } from "@/lib/worker/calendar-job";
 import type { HermesCalendarChangedResult } from "@/types/dashboard-contracts";
 
 // POST /api/hermes/calendar/changed: Hermes just created or moved an event, so pull the
@@ -24,17 +24,18 @@ export async function syncCalendarNow(env: NodeJS.ProcessEnv = process.env): Pro
   }
 
   const previous = globalForSync.hermesCalendarSync ?? Promise.resolve();
-  const run: Promise<CalendarSyncResult> = previous.catch(() => undefined).then(() => syncCalendarTimeline(new Date(), env));
+  // Same job as the worker runs, so the same timeline.changed rules apply (changed dates, and
+  // today when the sync error appears or clears).
+  const run: Promise<CalendarJobResult> = previous.catch(() => undefined).then(() => runCalendarSync(new Date(), env));
   globalForSync.hermesCalendarSync = run;
 
-  let result: CalendarSyncResult;
+  let result: CalendarJobResult["sync"];
   try {
-    result = await run;
+    result = (await run).sync;
   } catch (error) {
     throw asUpstream(error, "Google Calendar sync failed");
   }
 
-  for (const date of result.changedDates) await publishLiveEvent({ type: "timeline.changed", date });
   return {
     calendarId: result.calendarId,
     changedDates: result.changedDates,

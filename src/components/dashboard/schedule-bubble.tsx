@@ -7,7 +7,7 @@ import { ChatIcon } from "@/components/ui/icons";
 import { Field, NumberInput, TimeInput } from "@/components/ui/inputs";
 import { localDateString } from "@/lib/time/zone";
 import type { AlertDto, ChecklistItemDto, ScheduleRequestBody, ScheduleRequestDto } from "@/types/dashboard-contracts";
-import { fetchJson, isAbortError } from "./api";
+import { fetchJson, isAbortError, isApiRequestError } from "./api";
 import { useDashboard, useLiveEvent } from "./context";
 import { busyRanges } from "./schedule-bubble/find-free";
 import { formatDuration, parseLength, wallMinutes } from "./schedule-bubble/format";
@@ -200,6 +200,14 @@ export function ScheduleBubble({ target, onClose }: { target: ScheduleTarget; on
       apply(dto);
     } catch (error) {
       if (isAbortError(error)) return;
+      // A plain 404 means the scheduling route itself is not there yet (Phase 5), not a Hermes failure.
+      if (isApiRequestError(error, "HTTP_ERROR") && error.status === 404) {
+        pendingRef.current = null;
+        setRequestId(null);
+        setPhase("failed");
+        say({ who: "hermes", text: MESSAGES.notConnected });
+        return;
+      }
       noAnswer();
     }
   }
