@@ -53,6 +53,8 @@ Two layers, each gating a different way in:
 |---|---|---|
 | Nginx Proxy Manager access list | the public hostname | NPM -> Access Lists (LAN / NetBird / Tailscale) |
 | `DASHBOARD_ALLOWED_CIDRS` | direct connections to `:4849` | the stack's `.env` |
+| `DASHBOARD_ALLOWED_HOSTS` | the host names the app answers to (DNS rebinding) | the stack's `.env` |
+| same-origin check | browser writes to `/api/*` from other sites (CSRF) | built in, nothing to set |
 
 The app checks the address that opened the TCP connection and never trusts `X-Forwarded-For`, so a
 client cannot talk its way in with a header. Two consequences:
