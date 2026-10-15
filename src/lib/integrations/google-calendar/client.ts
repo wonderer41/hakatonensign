@@ -24,7 +24,25 @@ function responseCode(status: number): "UNAUTHORIZED" | "RATE_LIMITED" | "UPSTRE
   return "UPSTREAM_ERROR";
 }
 
+// Google access tokens last an hour. Reuse one until a minute before it expires instead of asking the
+// token endpoint on every sync (720 times a day at one sync every 2 minutes, about 24 with reuse).
+const TOKEN_REUSE_MARGIN_MS = 60_000;
+
+let cachedToken: { key: string; value: string; expiresAt: number } | null = null;
+
+function tokenKey(config: GoogleCalendarConfig): string {
+  return `${config.clientId}\n${config.refreshToken}`;
+}
+
+/** Drops the reused token after Google rejected it, so the next call fetches a fresh one. */
+function forgetAccessToken(token: string): void {
+  if (cachedToken?.value === token) cachedToken = null;
+}
+
 async function accessToken(config: GoogleCalendarConfig): Promise<string> {
+  const key = tokenKey(config);
+  if (cachedToken && cachedToken.key === key && cachedToken.expiresAt > Date.now()) return cachedToken.value;
+
   let response: Response;
   try {
     response = await fetch(GOOGLE_TOKEN_URL, {
@@ -55,16 +73,20 @@ async function accessToken(config: GoogleCalendarConfig): Promise<string> {
   if (!isRecord(payload) || typeof payload.access_token !== "string" || !payload.access_token) {
     throw new HttpError("UPSTREAM_ERROR", "Google OAuth returned no access token");
   }
+  const expiresInMs = typeof payload.expires_in === "number" ? payload.expires_in * 1000 : 0;
+  const expiresAt = Date.now() + expiresInMs - TOKEN_REUSE_MARGIN_MS;
+  cachedToken = expiresAt > Date.now() ? { key, value: payload.access_token, expiresAt } : null;
   return payload.access_token;
 }
 
+/** One page of events, or null when Google rejected the access token (401). */
 async function fetchPage(
   config: GoogleCalendarConfig,
   token: string,
   timeMin: string,
   timeMax: string,
   pageToken?: string,
-): Promise<CalendarListResponse> {
+): Promise<CalendarListResponse | null> {
   const params = new URLSearchParams({
     calendarId: config.calendarId,
     timeMin,
@@ -86,6 +108,7 @@ async function fetchPage(
   } catch {
     throw new HttpError("UPSTREAM_ERROR", "Google Calendar API could not be reached");
   }
+  if (response.status === 401) return null;
   if (!response.ok) throw new HttpError(responseCode(response.status), `Google Calendar API request failed with status ${response.status}`);
 
   let payload: unknown;
@@ -96,6 +119,23 @@ async function fetchPage(
   }
   if (!isRecord(payload)) throw new HttpError("UPSTREAM_ERROR", "Google Calendar returned an invalid response");
   return payload as CalendarListResponse;
+}
+
+/** fetchPage with the reused token; if Google rejects it (revoked or expired early), retries once with a fresh one. */
+async function fetchPageAuthorized(
+  config: GoogleCalendarConfig,
+  timeMin: string,
+  timeMax: string,
+  pageToken?: string,
+): Promise<CalendarListResponse> {
+  const token = await accessToken(config);
+  const page = await fetchPage(config, token, timeMin, timeMax, pageToken);
+  if (page) return page;
+
+  forgetAccessToken(token);
+  const retry = await fetchPage(config, await accessToken(config), timeMin, timeMax, pageToken);
+  if (!retry) throw new HttpError("UNAUTHORIZED", "Google Calendar API request failed with status 401");
+  return retry;
 }
 
 // ---------- Timeline window (CalendarEvent cache) ----------
@@ -168,12 +208,11 @@ export async function fetchGoogleCalendarWindow(
   timeMin: Date,
   timeMax: Date,
 ): Promise<GoogleCalendarWindow> {
-  const token = await accessToken(config);
   const events: GoogleCalendarWindowEvent[] = [];
   let pageToken: string | undefined;
 
   for (let page = 0; page < MAX_WINDOW_PAGES; page += 1) {
-    const response = await fetchPage(config, token, timeMin.toISOString(), timeMax.toISOString(), pageToken);
+    const response = await fetchPageAuthorized(config, timeMin.toISOString(), timeMax.toISOString(), pageToken);
     if (!Array.isArray(response.items)) throw new HttpError("UPSTREAM_ERROR", "Google Calendar returned an invalid event list");
     events.push(...response.items.map(parseWindowEvent));
     if (typeof response.nextPageToken !== "string") return { events, complete: true };
