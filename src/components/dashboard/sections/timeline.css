@@ -185,7 +185,6 @@
   background: rgba(8, 18, 22, 0.55);
   border: 1px solid rgba(216, 226, 220, 0.35);
   backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 
 /* Mockup tint rgba(156,143,208,.14) laid over the regular dark fill, so the muted "via hermes" keeps
@@ -201,7 +200,6 @@
   background: transparent;
   border: 1px dashed rgba(156, 143, 208, 0.8);
   backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 /* Done: the mockup fades the whole card to 55%, but over the light patches of the painting that leaves the
@@ -302,7 +300,6 @@
   text-overflow: ellipsis;
   background: rgba(8, 18, 22, 0.55);
   backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 
 /* ---------- Empty day ---------- */
