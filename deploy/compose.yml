@@ -6,7 +6,8 @@
 # - worker   : background jobs (scripts/worker.ts), a separate container from the SAME image.
 #
 # app, worker and migrate use `network_mode: host`, so they reach Postgres on 127.0.0.1:5432 and
-# Hermes on 127.0.0.1:8642. All settings come from the stack's `.env` (see deploy/.env.example).
+# Hermes's API server on whatever address it binds (HERMES_API_URL). All settings come from the
+# stack's `.env` (see deploy/.env.example).
 # The `.env` must sit next to this file; in Komodo set the stack's Run Directory to `deploy`.
 
 x-app: &app
